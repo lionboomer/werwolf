@@ -176,7 +176,11 @@
       </div>
       <p class="hint">${canStart
         ? (klein ? "Kleine Runde: In Nacht 1 reißt das Rudel nicht, und die Wölfe gewinnen erst, wenn alle Dorfbewohner tot sind." : "")
-        : `Braucht 3–12 Spieler zum Start (aktuell ${count}).`}</p>
+        : (count===2
+            ? `Zu zweit geht es nicht — einer wüsste sofort alles. <b>Nimm einen Bot dazu</b>, dann seid ihr zu dritt.`
+            : count===1
+              ? `Allein spielen? <b>Zwei Bots dazunehmen</b>, dann kann es losgehen.`
+              : `Braucht 3–12 Spieler zum Start (aktuell ${count}).`)}</p>
       <button class="btn" data-action="start-game" ${canStart?"":"disabled"}>Rollen verteilen &amp; Spiel starten</button>
     `, "phase-night");
   }
