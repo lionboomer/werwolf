@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>WERWÖLFE — Schattenmoor (Spieler)</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="connbar" id="connbar">Verbindung verloren — versuche erneut zu verbinden …</div>
+<div class="sky" id="sky">
+  <div class="stars" id="stars"></div>
+  <div class="fog"></div>
+  <div class="fog f2"></div>
+  <div class="moonshape"></div>
+</div>
+<div id="app">
+  <div class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="4"><path d="M50 8c11 10 11 26 0 34-11-8-11-24 0-34z"/><path d="M20 70c8-14 22-20 30-20s22 6 30 20"/></svg>
+      <span>SCHATTENMOOR</span>
+    </div>
+    <div class="topbar-right">
+      <div class="night-counter" id="nightCounter"></div>
+      <button type="button" class="sound-toggle" id="soundToggle" data-action="sound-toggle" aria-label="Ton umschalten"></button>
+    </div>
+  </div>
+  <div class="scene enter" id="scene"></div>
+  <div class="footer-note">Werwölfe von Schattenmoor · Jede Person spielt auf ihrem eigenen Gerät</div>
+</div>
+<script src="/roles.js"></script>
+<script>
+(function(){
+  "use strict";
+  const { ICON, ROLES } = window.WERWOLF_DATA;
+
+  /* ---------- sound (ported, synthesized) ---------- */
+  const SOUND_ON_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M17 8c1.5 1.5 1.5 6.5 0 8"/><path d="M19.5 5.5c3 3 3 10 0 13"/></svg>`;
+  const SOUND_OFF_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16 9l6 6M22 9l-6 6"/></svg>`;
+  let soundEnabled = true;
+  try{ const s = localStorage.getItem("schattenmoor-sound"); if(s==="off") soundEnabled=false; }catch(e){}
+  let actx = null;
+  function ac(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(actx && actx.state==="suspended"){ actx.resume().catch(()=>{}); } return actx; }
+  function tone(freq, dur, opts){
+    if(!soundEnabled) return;
+    try{
+      const ctx = ac(); if(!ctx) return; opts=opts||{};
+      const t0 = ctx.currentTime + (opts.delay||0);
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = opts.type||"sine"; osc.frequency.setValueAtTime(freq, t0);
+      if(opts.sweepTo) osc.frequency.linearRampToValueAtTime(opts.sweepTo, t0+dur);
+      const peak = opts.gain!==undefined?opts.gain:0.08;
+      gain.gain.setValueAtTime(0,t0); gain.gain.linearRampToValueAtTime(peak, t0+Math.min(0.03,dur/3));
+      gain.gain.exponentialRampToValueAtTime(0.0008, t0+dur);
+      osc.connect(gain); gain.connect(ctx.destination); osc.start(t0); osc.stop(t0+dur+0.05);
+    }catch(e){ /* audio must never block gameplay */ }
+  }
+  const sfx = {
+    tap(){ tone(520,0.05,{type:"sine",gain:0.03}); },
+    flip(){ tone(300,0.22,{type:"triangle",sweepTo:520,gain:0.06}); },
+    reveal(){ tone(660,0.35,{type:"sine",sweepTo:880,gain:0.05}); },
+    chime(){ tone(523,0.4,{gain:0.05}); tone(659,0.4,{gain:0.045,delay:0.12}); tone(784,0.5,{gain:0.04,delay:0.24}); },
+    bell(){ tone(196,0.9,{type:"triangle",gain:0.06}); tone(294,0.9,{gain:0.03,delay:0.02}); },
+    village(){ tone(523,0.3,{gain:0.06}); tone(659,0.3,{delay:0.15,gain:0.06}); tone(784,0.5,{delay:0.3,gain:0.06}); tone(1046,0.6,{delay:0.45,gain:0.05}); },
+    wolves(){ tone(220,0.5,{type:"sawtooth",gain:0.05}); tone(180,0.6,{type:"sawtooth",delay:0.2,gain:0.05}); tone(110,1.1,{delay:0.35,gain:0.07}); },
+    lovers(){ tone(440,0.4,{gain:0.05}); tone(554,0.4,{delay:0.15,gain:0.05}); tone(659,0.6,{delay:0.3,gain:0.05}); }
+  };
+  function setSoundEnabled(v){ soundEnabled=v; try{ localStorage.setItem("schattenmoor-sound", v?"on":"off"); }catch(e){} updateSoundDom(); }
+  function updateSoundDom(){ const b=document.getElementById("soundToggle"); if(b) b.innerHTML = soundEnabled?SOUND_ON_ICON:SOUND_OFF_ICON; }
+  updateSoundDom();
+
+  /* ---------- connection ---------- */
+  const sceneEl = document.getElementById("scene");
+  const nightCounterEl = document.getElementById("nightCounter");
+  const connbar = document.getElementById("connbar");
+
+  let ws = null;
+  let session = null; // {code, token, playerId}
+  let latest = null;  // last server state
+  let joinError = null;
+  let lastPhase = null;
+  let lastWinner = null;
+  try{ const raw = localStorage.getItem("schattenmoor-player-session"); if(raw) session = JSON.parse(raw); }catch(e){}
+
+  function wsUrl(){
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    return proto + "//" + location.host + "/ws";
+  }
+
+  function connect(){
+    ws = new WebSocket(wsUrl());
+    ws.onopen = () => {
+      connbar.classList.remove("show");
+      if(session && session.token){
+        send({ t:"joinAsPlayer", code:session.code, token:session.token, name:session.name||"" });
+      } else if(!latest){
+        renderJoinScreen();
+      }
+    };
+    ws.onmessage = (ev) => {
+      let msg; try{ msg = JSON.parse(ev.data); }catch(e){ return; }
+      handleServerMessage(msg);
+    };
+    ws.onclose = () => {
+      connbar.classList.add("show");
+      setTimeout(connect, 1500);
+    };
+    ws.onerror = () => {};
+  }
+
+  function send(obj){ if(ws && ws.readyState===ws.OPEN) ws.send(JSON.stringify(obj)); }
+
+  function handleServerMessage(msg){
+    if(msg.t === "joined"){
+      session = { code: msg.code, token: msg.token, playerId: msg.playerId, name: session && session.name };
+      try{ localStorage.setItem("schattenmoor-player-session", JSON.stringify(session)); }catch(e){}
+      joinError = null;
+      return;
+    }
+    if(msg.t === "error"){
+      joinError = msg.message;
+      if(!latest) renderJoinScreen();
+      return;
+    }
+    if(msg.t === "kicked"){
+      session = null;
+      try{ localStorage.removeItem("schattenmoor-player-session"); }catch(e){}
+      latest = null;
+      renderJoinScreen("Du wurdest aus der Lobby entfernt.");
+      return;
+    }
+    if(msg.t === "state"){
+      latest = msg;
+      playSoundsForTransition(msg);
+      render();
+      return;
+    }
+  }
+
+  function playSoundsForTransition(state){
+    if(state.phase !== lastPhase){
+      if(state.phase==="reveal") window.__cardFlipped=false;
+      if(state.phase==="wolves") { /* handled per-viewer via waitingMessage; keep quiet cue */ }
+      if(state.phase==="morning"){
+        const anyDeath = state.log.slice(-6).some(l=>l.cls==="death");
+        if(anyDeath) sfx.bell(); else sfx.chime();
+      }
+      if(state.phase==="elimination") sfx.bell();
+      if(state.phase==="day-discuss") sfx.chime();
+      lastPhase = state.phase;
+    }
+    if(state.winner && state.winner !== lastWinner){
+      if(state.winner.type==="village") sfx.village();
+      else if(state.winner.type==="wolves") sfx.wolves();
+      else sfx.lovers();
+      lastWinner = state.winner;
+    }
+  }
+
+  function setScene(html, phaseClass){
+    sceneEl.classList.remove("enter");
+    sceneEl.innerHTML = html;
+    void sceneEl.offsetWidth;
+    sceneEl.classList.add("enter");
+    document.body.classList.remove("phase-day","phase-wolves");
+    if(phaseClass) document.body.classList.add(phaseClass);
+  }
+
+  function initials(name){ return (name||"?").trim().slice(0,2).toUpperCase(); }
+  function nameOf(state, id){ const p = state.players.find(p=>p.id===id); return p ? p.name : "?"; }
+
+  function narratorBlock(tag, html){
+    return `<div class="narrator">${ICON.narrator}<div><span class="tag">${tag}</span><div class="say">${html}</div></div></div>`;
+  }
+
+  function chipsHTML(state, ids, action, selectedIds){
+    selectedIds = selectedIds || [];
+    return `<div class="grid" data-chipgrid="${action}">` + ids.map(id=>{
+      const p = state.players.find(x=>x.id===id);
+      if(!p) return "";
+      const sel = selectedIds.includes(id) ? " selected":"";
+      return `<button type="button" class="pchip${sel}" data-action="${action}" data-id="${id}">
+        <span class="avatar">${initials(p.name)}</span>
+        <span class="pname">${p.name}</span>
+      </button>`;
+    }).join("") + `</div>`;
+  }
+
+  /* ---------- join screen ---------- */
+  function renderJoinScreen(message){
+    latest = null;
+    setScene(`
+      <div class="panel">
+        <div class="eyebrow">Ein Dorf. Eine Vollmondnacht.</div>
+        <h2 class="title" style="margin-top:6px;">Lobby beitreten</h2>
+        <p class="lead">Trag deinen Namen und den 4-stelligen Code vom Erzähler ein.</p>
+      </div>
+      ${message ? `<div class="error-banner">${message}</div>` : ""}
+      ${joinError ? `<div class="error-banner">${joinError}</div>` : ""}
+      <div class="panel">
+        <div class="form-list">
+          <input type="text" id="nameInput" placeholder="Dein Name" maxlength="24" />
+          <input type="text" id="codeInput" class="code-input" placeholder="CODE" maxlength="4" />
+        </div>
+      </div>
+      <button class="btn" data-action="join-submit">Beitreten</button>
+    `, "phase-night");
+    updateNightCounter();
+    const codeInput = document.getElementById("codeInput");
+    if(codeInput) codeInput.addEventListener("input", ()=>{ codeInput.value = codeInput.value.toUpperCase(); });
+  }
+
+  function updateNightCounter(){
+    if(latest && latest.night && latest.phase!=="lobby" && latest.phase!=="end"){
+      nightCounterEl.textContent = "Nacht " + latest.night;
+    } else nightCounterEl.textContent = "";
+  }
+
+  /* ---------- phase renders ---------- */
+  function render(){
+    if(!latest){ renderJoinScreen(); return; }
+    updateNightCounter();
+    const s = latest;
+    switch(s.phase){
+      case "lobby": return renderLobby(s);
+      case "reveal": return renderReveal(s);
+      case "night-intro": return renderWaiting(s, "Der Erzähler spricht", `Schließt die Augen, Schattenmoor. Die Nacht senkt sich über das Dorf.`, "phase-night");
+      case "cupid": return renderCupidOrWait(s);
+      case "wolves": return renderWolfOrWait(s);
+      case "seer": return renderSeerOrWait(s);
+      case "witch": return renderWitchOrWait(s);
+      case "morning": return renderMorning(s);
+      case "hunter-shot": return renderHunterOrWait(s);
+      case "day-discuss": return renderDayDiscuss(s);
+      case "day-vote": return renderDayVote(s);
+      case "elimination": return renderElimination(s);
+      case "end": return renderEnd(s);
+      default: return renderWaiting(s, "Der Erzähler", "Einen Moment …", "phase-night");
+    }
+  }
+
+  function renderLobby(s){
+    setScene(`
+      <div class="panel">
+        ${narratorBlock("Warteraum", `Ihr seid in der Lobby <b>${s.code}</b>. Wartet, bis der Erzähler das Spiel startet.`)}
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Im Dorf versammelt (${s.players.length})</div>
+        <div class="roster-live">
+          ${s.players.map(p=>`<div class="plist-row"><span class="status-dot ${p.connected?"":"off"}"></span><span class="avatar">${initials(p.name)}</span><span class="pname">${p.name}${p.isYou?" (du)":""}</span></div>`).join("")}
+        </div>
+      </div>
+    `, "phase-night");
+  }
+
+  function renderWaiting(s, tag, text, phaseClass){
+    setScene(`
+      <div class="panel">${narratorBlock(tag, text)}</div>
+      ${rosterMini(s)}
+    `, phaseClass||"phase-night");
+  }
+
+  function rosterMini(s){
+    return `<div class="panel">
+      <div class="eyebrow">Dorf (${s.players.filter(p=>p.alive).length} lebend von ${s.players.length})</div>
+      <div class="roster-live">
+        ${s.players.map(p=>`<div class="plist-row"><span class="avatar ${!p.alive?"dead":""}">${initials(p.name)}</span><span class="pname">${p.name}${p.isYou?" (du)":""}${!p.alive?" ✝ "+ (p.roleName||"") :""}</span></div>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  function renderReveal(s){
+    const me = s.me;
+    const role = me && me.role ? ROLES[me.role] : null;
+    if(!role){ renderWaiting(s,"Der Erzähler","Die Rollen werden verteilt …"); return; }
+    const acked = me.ackedRole !== undefined ? me.ackedRole : false;
+    const wolfCompanions = s.wolfCompanions;
+    if(!window.__cardFlipped){
+      setScene(`
+        <div class="panel pass-card">
+          ${ICON.narrator}
+          <div class="eyebrow">Deine Rolle</div>
+          <div class="pass-name">${me.name}</div>
+          <p class="lead">Tippe, um deine Rolle aufzudecken. Halte dein Gerät so, dass niemand mitschaut.</p>
+          <button class="btn" style="margin-top:18px;" data-action="reveal-flip">Karte aufdecken</button>
+        </div>
+      `, "phase-night");
+    } else {
+      setScene(`
+        <div class="card-stage">
+          <div class="card flipped">
+            <div class="face front">
+              <div class="icon-wrap" style="color:${role.team==='wolf'?'var(--blood-bright)':'var(--moss)'}">${role.icon}</div>
+              <div class="role-name">${role.name}</div>
+              <div class="role-team ${role.team}">${role.team==='wolf'?'Werwölfe':'Dorf'}</div>
+              <div class="role-flavor">„${role.flavor}“</div>
+              <div class="role-mechanic">${role.mechanic}</div>
+              ${wolfCompanions ? (wolfCompanions.length ? `<div class="role-companions">Deine Mitwölfe: ${wolfCompanions.join(", ")}</div>` : `<div class="role-companions">Du bist der einzige Werwolf.</div>`) : ""}
+            </div>
+          </div>
+        </div>
+        ${acked ? `<div class="panel"><p class="lead" style="margin:0;text-align:center;">Warte, bis der Erzähler fortfährt …</p></div>` : `<button class="btn" data-action="ack-role">Rolle gemerkt</button>`}
+      `, "phase-night");
+    }
+  }
+
+  function renderCupidOrWait(s){
+    if(!s.myAction || s.myAction.type!=="cupid") return renderWaiting(s, "Amor erwacht", s.waitingMessage || "Amor überlegt …");
+    const a = s.myAction;
+    setScene(`
+      <div class="panel">${narratorBlock("Du bist Amor", `Wähle <b>zwei Herzen</b>, die diese Nacht auf ewig verbunden werden.`)}</div>
+      <div class="panel">
+        ${chipsHTML(s, a.pickable, "cupid-pick", a.picked)}
+        <p class="hint" id="cupidHint" style="margin-top:10px;">Ausgewählt: ${a.picked.map(id=>nameOf(s,id)).join(", ")||"—"}</p>
+      </div>
+      <button class="btn" id="cupidConfirmBtn" data-action="cupid-confirm" ${a.picked.length===2?"":"disabled"}>Verliebte bestätigen</button>
+    `, "phase-night");
+  }
+
+  function renderWolfOrWait(s){
+    if(!s.myAction || s.myAction.type!=="wolf") return renderWaiting(s, "Die Werwölfe erwachen", s.waitingMessage || "Die Werwölfe beraten sich …", "phase-wolves");
+    const a = s.myAction;
+    setScene(`
+      <div class="panel">${narratorBlock("Du bist ein Werwolf", `Einigt euch leise auf <b>ein Opfer</b> aus dem Dorf. Eure Wahl ist für alle Wölfe sichtbar.`)}</div>
+      <div class="panel">
+        ${chipsHTML(s, a.pickable, "wolf-pick", a.shared!=null?[a.shared]:[])}
+        <p class="hint" style="margin-top:10px;">Ihr dürft jeden wählen — auch euch selbst oder einen Mitwolf.</p>
+      </div>
+      <button class="btn danger" id="wolfConfirmBtn" data-action="wolf-confirm" ${a.shared!=null?"":"disabled"}>Opfer bestätigen</button>
+    `, "phase-wolves");
+  }
+
+  function renderSeerOrWait(s){
+    if(!s.myAction || s.myAction.type!=="seer") return renderWaiting(s, "Die Seherin erwacht", s.waitingMessage || "Die Seherin blickt in die Zukunft …");
+    const a = s.myAction;
+    if(a.result==null){
+      setScene(`
+        <div class="panel">${narratorBlock("Du bist die Seherin", `Wessen wahre Natur willst du in dieser Nacht erblicken?`)}</div>
+        <div class="panel">${chipsHTML(s, a.pickable, "seer-pick", [])}</div>
+      `, "phase-night");
+    } else {
+      const target = s.players.find(p=>p.id===a.result);
+      const role = ROLES[a.resultRole];
+      setScene(`
+        <div class="panel">${narratorBlock("Die Vision", `Im Traum zeigt sich ${target.name}. Merke dir gut, was du siehst.`)}</div>
+        <div class="panel" style="text-align:center;">
+          <div class="icon-wrap" style="width:72px;height:72px;margin:0 auto 8px;color:${role.team==='wolf'?'var(--blood-bright)':'var(--moss)'}">${role.icon}</div>
+          <div class="role-name" style="font-size:1.2rem;">${target.name} ist: ${role.name}</div>
+        </div>
+        <button class="btn" data-action="seer-close">Augen wieder schließen</button>
+      `, "phase-night");
+    }
+  }
+
+  function renderWitchOrWait(s){
+    if(!s.myAction || s.myAction.type!=="witch") return renderWaiting(s, "Die Hexe erwacht", s.waitingMessage || "Die Hexe entscheidet über ihre Tränke …");
+    const a = s.myAction;
+    if(a.step==="ask-heal"){
+      const victim = a.wolfVictimId!=null ? nameOf(s, a.wolfVictimId) : null;
+      setScene(`
+        <div class="panel">${narratorBlock("Du bist die Hexe", victim
+          ? `Die Werwölfe wählten <b>${victim}</b> als Opfer.${a.healUsed?" Dein Heiltrank ist bereits verbraucht.":" Willst du diese Person mit deinem letzten Heiltrank retten?"}`
+          : `In dieser Nacht floss kein Blut, das dein Heiltrank retten müsste.`)}</div>
+        <div class="row">
+          <button class="btn secondary" data-action="witch-heal-no">Nicht heilen</button>
+          <button class="btn" data-action="witch-heal-yes" ${(!victim||a.healUsed)?"disabled":""}>Retten</button>
+        </div>
+      `, "phase-night");
+    } else {
+      setScene(`
+        <div class="panel">${narratorBlock("Der zweite Trank", a.poisonUsed
+          ? `Dein Gifttrank ist bereits verbraucht.`
+          : `Möchtest du jemanden mit deinem letzten Gift vergiften — oder ihn im Kessel lassen?`)}</div>
+        ${!a.poisonUsed ? `<div class="panel">${chipsHTML(s, a.poisonPickable, "witch-poison-pick", a.poisonPick!=null?[a.poisonPick]:[])}</div>` : ""}
+        <div class="row">
+          <button class="btn secondary" data-action="witch-poison-no">Kein Gift heute</button>
+          <button class="btn danger" id="witchPoisonBtn" data-action="witch-poison-yes" ${(a.poisonUsed||a.poisonPick==null)?"disabled":""}>Vergiften</button>
+        </div>
+      `, "phase-night");
+    }
+  }
+
+  function renderMorning(s){
+    const lines = s.log.slice(-6);
+    const anyDeath = lines.some(l=>l.cls==="death");
+    setScene(`
+      <div class="panel">${narratorBlock("Der Morgen graut", anyDeath ? `Öffnet die Augen, Schattenmoor. Der Erzähler bringt schwere Nachricht aus der Nacht.` : `Öffnet die Augen. Diese Nacht verging ruhig — niemand kam zu Schaden.`)}</div>
+      <div class="panel log">${lines.length ? lines.map(l=>`<div class="line ${l.cls}">${l.text}</div>`).join("") : `<div class="line calm">Kein Vorfall zu berichten.</div>`}</div>
+      <div class="panel"><p class="lead" style="margin:0;text-align:center;">Der Erzähler führt euch weiter …</p></div>
+    `, "phase-day");
+  }
+
+  function renderHunterOrWait(s){
+    if(!s.myAction || s.myAction.type!=="hunter") return renderWaiting(s, "Der letzte Schuss", s.waitingMessage || "Der Jäger zielt ein letztes Mal …", "phase-day");
+    const a = s.myAction;
+    setScene(`
+      <div class="panel">${narratorBlock("Dein letzter Schuss", `Dein Ende naht — doch dein Finger liegt noch am Abzug. Wähle, wen du mit dir nimmst.`)}</div>
+      <div class="panel">${chipsHTML(s, a.pickable, "hunter-pick", a.picked!=null?[a.picked]:[])}</div>
+      <button class="btn danger" id="hunterConfirmBtn" data-action="hunter-confirm" ${a.picked!=null?"":"disabled"}>Abdrücken</button>
+    `, "phase-day");
+  }
+
+  function renderDayDiscuss(s){
+    const t = s.timer.seconds, total = s.timer.total;
+    const circumference = 2*Math.PI*78;
+    const offset = circumference * (1 - Math.max(0, t/total));
+    const mm = String(Math.floor(t/60)).padStart(2,"0");
+    const ss = String(t%60).padStart(2,"0");
+    const low = t<=30;
+    setScene(`
+      <div class="panel">${narratorBlock("Der Tag beginnt", `Das Dorf versammelt sich. Diskutiert, wer unter euch mit dem Wolf im Blut lebt.`)}</div>
+      <div class="panel timer-wrap">
+        <svg class="ring" viewBox="0 0 180 180">
+          <circle class="bg" cx="90" cy="90" r="78"/>
+          <circle class="fg" cx="90" cy="90" r="78" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" transform="rotate(-90 90 90)" style="stroke:${low?'var(--blood-bright)':'var(--candle)'}"/>
+          <text class="ring-label" x="90" y="97">${mm}:${ss}</text>
+        </svg>
+      </div>
+      ${!s.me.alive ? `<div class="panel"><p class="lead" style="margin:0;text-align:center;">Du bist ausgeschieden — schau still zu.</p></div>` : `<div class="panel"><p class="lead" style="margin:0;text-align:center;">Der Erzähler öffnet die Abstimmung, sobald ihr fertig diskutiert habt.</p></div>`}
+    `, "phase-day");
+  }
+
+  function renderDayVote(s){
+    if(!s.me.alive){
+      setScene(`<div class="panel">${narratorBlock("Abstimmung", "Du bist ausgeschieden — schau still zu, wer heute verbannt wird.")}</div>${voteTallyBlock(s)}`, "phase-day");
+      return;
+    }
+    const a = s.myAction;
+    setScene(`
+      <div class="panel">${narratorBlock("Die Abstimmung", s.voteRestrict ? `Stimmengleichheit! Stimmt erneut ab — nur unter den Verdächtigen.` : `Wen verdächtigst du? Tippe, um deine Stimme abzugeben.`)}</div>
+      <div class="panel">${chipsHTML(s, a.pickable, "vote-pick", a.myVote!=null?[a.myVote]:[])}</div>
+      ${voteTallyBlock(s)}
+    `, "phase-day");
+  }
+
+  function voteTallyBlock(s){
+    const pool = s.voteRestrict || s.players.filter(p=>p.alive).map(p=>p.id);
+    return `<div class="panel">
+      <div class="eyebrow">Live-Stimmen</div>
+      ${pool.map(id=>`<div class="vrow"><span class="pname">${nameOf(s,id)}</span><span class="vcount">${s.voteTally[id]||0}</span></div>`).join("")}
+    </div>`;
+  }
+
+  function renderElimination(s){
+    const lines = s.log.slice(-3);
+    setScene(`
+      <div class="panel">${narratorBlock("Verbannung", "Das Dorf hat entschieden.")}</div>
+      <div class="panel log">${lines.map(l=>`<div class="line ${l.cls}">${l.text}</div>`).join("")}</div>
+    `, "phase-day");
+  }
+
+  function renderEnd(s){
+    const w = s.winner;
+    let title, sub, cls = w.type;
+    if(cls==="village"){ title="Das Dorf hat gesiegt"; sub="Alle Werwölfe wurden enttarnt. Schattenmoor kann wieder ruhig schlafen."; }
+    else if(cls==="wolves"){ title="Die Werwölfe haben gewonnen"; sub="Der Wald hat das Dorf verschlungen."; }
+    else { title="Die Liebenden triumphieren"; sub= nameOf(s,w.ids[0]) + " und " + nameOf(s,w.ids[1]) + " überstehen die Nacht gemeinsam."; }
+    setScene(`
+      <div class="end-banner ${cls}"><h2>${title}</h2><p>${sub}</p></div>
+      <div class="panel">
+        <div class="eyebrow">Chronik der Nacht</div>
+        <div class="roster-recap">
+          ${s.players.map(p=>`<div class="rr ${!p.alive?"dead-r":""}"><span class="rn">${p.name}${!p.alive?" ✝":""}</span><span class="rr-role">${p.roleName||""}</span></div>`).join("")}
+        </div>
+      </div>
+      <div class="panel"><p class="lead" style="margin:0;text-align:center;">Der Erzähler kann eine neue Runde starten.</p></div>
+    `, cls==="wolves"?"phase-wolves":"phase-day");
+  }
+
+  /* ---------- input events ---------- */
+  document.getElementById("app").addEventListener("click", (e)=>{
+    const btn = e.target.closest("[data-action]");
+    if(!btn) return;
+    const action = btn.getAttribute("data-action");
+    if(action==="sound-toggle"){ setSoundEnabled(!soundEnabled); return; }
+    sfx.tap();
+
+    if(action==="join-submit"){
+      const name = document.getElementById("nameInput").value.trim();
+      const code = document.getElementById("codeInput").value.trim().toUpperCase();
+      if(!name){ joinError="Bitte gib deinen Namen ein."; renderJoinScreen(); return; }
+      if(code.length!==4){ joinError="Der Code hat 4 Zeichen."; renderJoinScreen(); return; }
+      session = { code, name };
+      send({ t:"joinAsPlayer", name, code });
+      return;
+    }
+    if(action==="reveal-flip"){ window.__cardFlipped=true; sfx.flip(); render(); return; }
+    if(action==="ack-role"){ send({t:"ackRole"}); return; }
+
+    if(action==="cupid-pick"){ send({t:"cupidPick", targetId: btn.getAttribute("data-id")}); return; }
+    if(action==="cupid-confirm"){ send({t:"cupidConfirm"}); return; }
+    if(action==="wolf-pick"){ send({t:"wolfPick", targetId: btn.getAttribute("data-id")}); return; }
+    if(action==="wolf-confirm"){ send({t:"wolfConfirm"}); return; }
+    if(action==="seer-pick"){ sfx.reveal(); send({t:"seerPick", targetId: btn.getAttribute("data-id")}); return; }
+    if(action==="seer-close"){ send({t:"seerClose"}); return; }
+    if(action==="witch-heal-yes"){ send({t:"witchHeal", value:true}); return; }
+    if(action==="witch-heal-no"){ send({t:"witchHeal", value:false}); return; }
+    if(action==="witch-poison-pick"){ send({t:"witchPoisonPick", targetId: btn.getAttribute("data-id")}); return; }
+    if(action==="witch-poison-yes"){ send({t:"witchPoisonDecide", value:true}); return; }
+    if(action==="witch-poison-no"){ send({t:"witchPoisonDecide", value:false}); return; }
+    if(action==="hunter-pick"){ send({t:"hunterPick", targetId: btn.getAttribute("data-id")}); return; }
+    if(action==="hunter-confirm"){ send({t:"hunterConfirm"}); return; }
+    if(action==="vote-pick"){ send({t:"votePick", targetId: btn.getAttribute("data-id")}); return; }
+  });
+
+  /* ---------- ambient stars ---------- */
+  (function seedStars(){
+    const el = document.getElementById("stars");
+    let html = "";
+    for(let i=0;i<60;i++){
+      const top = Math.random()*70, left = Math.random()*100, delay=(Math.random()*3).toFixed(2);
+      html += `<span class="star" style="top:${top}%; left:${left}%; animation-delay:${delay}s;"></span>`;
+    }
+    el.innerHTML = html;
+  })();
+
+  window.__cardFlipped = false;
+  renderJoinScreen();
+  connect();
+})();
+</script>
+</body>
+</html>

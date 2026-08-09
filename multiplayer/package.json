@@ -1,0 +1,16 @@
+{
+  "name": "werwolf-schattenmoor-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multiplayer-Server für Werwölfe von Schattenmoor — jede:r joint mit eigenem Gerät in eine Lobby, der Erzähler behält den Überblick.",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WERWÖLFE — Schattenmoor (Erzähler)</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="connbar" id="connbar">Verbindung verloren — versuche erneut zu verbinden …</div>
+<div class="sky" id="sky">
+  <div class="stars" id="stars"></div>
+  <div class="fog"></div>
+  <div class="fog f2"></div>
+  <div class="moonshape"></div>
+</div>
+<div id="app" class="wide">
+  <div class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="4"><path d="M50 8c11 10 11 26 0 34-11-8-11-24 0-34z"/><path d="M20 70c8-14 22-20 30-20s22 6 30 20"/></svg>
+      <span>SCHATTENMOOR — ERZÄHLER</span>
+    </div>
+    <div class="night-counter" id="nightCounter"></div>
+  </div>
+  <div class="scene enter" id="scene"></div>
+  <div class="footer-note">Diese Ansicht kennt alle Rollen — nicht mitspielen, nur erzählen.</div>
+</div>
+<script src="/roles.js"></script>
+<script>
+(function(){
+  "use strict";
+  const { ICON, ROLES } = window.WERWOLF_DATA;
+
+  const sceneEl = document.getElementById("scene");
+  const nightCounterEl = document.getElementById("nightCounter");
+  const connbar = document.getElementById("connbar");
+
+  let ws = null;
+  let session = null; // {code, narratorToken}
+  let latest = null;
+  try{ const raw = localStorage.getItem("schattenmoor-narrator-session"); if(raw) session = JSON.parse(raw); }catch(e){}
+
+  function wsUrl(){ const proto = location.protocol==="https:"?"wss:":"ws:"; return proto+"//"+location.host+"/ws"; }
+
+  function connect(){
+    ws = new WebSocket(wsUrl());
+    ws.onopen = () => {
+      connbar.classList.remove("show");
+      if(session && session.narratorToken){ send({t:"joinAsNarrator", code:session.code, token:session.narratorToken}); }
+      else if(!latest){ renderStart(); }
+    };
+    ws.onmessage = (ev) => { let msg; try{ msg=JSON.parse(ev.data); }catch(e){ return; } handle(msg); };
+    ws.onclose = () => { connbar.classList.add("show"); setTimeout(connect, 1500); };
+    ws.onerror = () => {};
+  }
+  function send(obj){ if(ws && ws.readyState===ws.OPEN) ws.send(JSON.stringify(obj)); }
+
+  function handle(msg){
+    if(msg.t==="roomCreated"){
+      session = { code: msg.code, narratorToken: msg.narratorToken };
+      try{ localStorage.setItem("schattenmoor-narrator-session", JSON.stringify(session)); }catch(e){}
+      return;
+    }
+    if(msg.t==="error"){
+      if(!latest) renderStart(msg.message);
+      return;
+    }
+    if(msg.t==="state"){ latest = msg; render(); return; }
+  }
+
+  function setScene(html, phaseClass){
+    sceneEl.classList.remove("enter");
+    sceneEl.innerHTML = html;
+    void sceneEl.offsetWidth;
+    sceneEl.classList.add("enter");
+    document.body.classList.remove("phase-day","phase-wolves");
+    if(phaseClass) document.body.classList.add(phaseClass);
+  }
+  function initials(name){ return (name||"?").trim().slice(0,2).toUpperCase(); }
+  function nameOf(s,id){ const p=s.players.find(p=>p.id===id); return p?p.name:"?"; }
+  function narratorBlock(tag, html){ return `<div class="narrator">${ICON.narrator}<div><span class="tag">${tag}</span><div class="say">${html}</div></div></div>`; }
+
+  function updateNightCounter(){
+    if(latest && latest.phase!=="lobby" && latest.phase!=="end") nightCounterEl.textContent = "Nacht " + latest.night;
+    else nightCounterEl.textContent = "";
+  }
+
+  /* ---------- start screen ---------- */
+  function renderStart(message){
+    latest = null;
+    setScene(`
+      <div class="panel">
+        <div class="eyebrow">Erzähler-Konsole</div>
+        <h2 class="title" style="margin-top:6px;">Neue Lobby eröffnen</h2>
+        <p class="lead">Erstelle eine Lobby und gib den Code an deine Spieler:innen weiter. Diese Ansicht bleibt am besten auf einem eigenen Gerät, das nicht mitspielt.</p>
+      </div>
+      ${message ? `<div class="error-banner">${message}</div>` : ""}
+      <button class="btn" data-action="create-room">Neue Lobby erstellen</button>
+    `, "phase-night");
+    updateNightCounter();
+  }
+
+  /* ---------- roster panel (always visible once room exists) ---------- */
+  function rosterPanel(s){
+    return `<div class="panel">
+      <div class="eyebrow">Dorf — ${s.players.length} Spieler${s.phase!=="lobby" ? ` · ${s.players.filter(p=>p.alive).length} lebend` : ""}</div>
+      <div class="roster-live">
+        ${s.players.map(p=>{
+          const role = p.role ? ROLES[p.role] : null;
+          const roleTag = role ? `<span class="${role.team==='wolf'?'role-tag-wolf':'role-tag-village'}">${role.name}</span>` : "";
+          const kick = s.phase==="lobby" ? `<button class="kick-btn" data-action="kick" data-id="${p.id}">entfernen</button>` : "";
+          const ack = s.phase==="reveal" ? `<span class="ack-badge ${p.ackedRole?"done":""}">${p.ackedRole?"✓ gesehen":"wartet …"}</span>` : "";
+          return `<div class="plist-row">
+            <span class="status-dot ${p.connected?"":"off"}"></span>
+            <span class="avatar ${!p.alive?"dead":""}">${initials(p.name)}</span>
+            <span class="pname">${p.name}${!p.alive?" ✝":""}</span>
+            ${roleTag}${ack}${kick}
+          </div>`;
+        }).join("")}
+      </div>
+    </div>`;
+  }
+
+  function chipsHTML(s, ids, label){
+    return `<div class="grid">` + ids.map(id=>{
+      const p = s.players.find(x=>x.id===id);
+      if(!p) return "";
+      return `<div class="pchip" style="cursor:default;"><span class="avatar">${initials(p.name)}</span><span class="pname">${p.name}</span></div>`;
+    }).join("") + `</div>`;
+  }
+
+  /* ---------- master render ---------- */
+  function render(){
+    if(!latest) return renderStart();
+    updateNightCounter();
+    const s = latest;
+    switch(s.phase){
+      case "lobby": return renderLobby(s);
+      case "reveal": return renderReveal(s);
+      case "night-intro": return renderAdvance(s, "Nacht beginnt", "Sag: „Schließt die Augen, Schattenmoor.“ Wenn alle bereit sind, geht es weiter.", "phase-night");
+      case "cupid": return renderCupid(s);
+      case "wolves": return renderWolves(s);
+      case "seer": return renderSeer(s);
+      case "witch": return renderWitch(s);
+      case "morning": return renderMorning(s);
+      case "hunter-shot": return renderHunter(s);
+      case "day-discuss": return renderDayDiscuss(s);
+      case "day-vote": return renderDayVote(s);
+      case "elimination": return renderElimination(s);
+      case "end": return renderEnd(s);
+    }
+  }
+
+  function renderLobby(s){
+    const count = s.players.length;
+    const canStart = count>=5 && count<=12;
+    setScene(`
+      <div class="code-display panel">
+        <div class="eyebrow">Lobby-Code — den Spieler:innen zum Beitritt geben</div>
+        <div class="code">${s.code}</div>
+      </div>
+      ${rosterPanel(s)}
+      <p class="hint">${canStart ? "" : `Braucht 5–12 Spieler zum Start (aktuell ${count}).`}</p>
+      <button class="btn" data-action="start-game" ${canStart?"":"disabled"}>Rollen verteilen &amp; Spiel starten</button>
+    `, "phase-night");
+  }
+
+  function renderReveal(s){
+    setScene(`
+      <div class="panel">${narratorBlock("Rollenverteilung", `Jede:r sieht jetzt privat die eigene Rolle. ${s.ackCount}/${s.players.length} haben bestätigt.`)}</div>
+      ${rosterPanel(s)}
+      <button class="btn" data-action="advance">Weiter zur ersten Nacht</button>
+    `, "phase-night");
+  }
+
+  function renderAdvance(s, tag, text, phaseClass){
+    setScene(`
+      <div class="panel">${narratorBlock(tag, text)}</div>
+      ${rosterPanel(s)}
+      <button class="btn" data-action="advance">Weiter</button>
+    `, phaseClass||"phase-day");
+  }
+
+  function renderCupid(s){
+    const amor = s.players.find(p=>p.role==="amor");
+    setScene(`
+      <div class="panel">${narratorBlock("Amor wacht", `${amor?amor.name:"Amor"} wählt gerade zwei Verliebte. Ausgewählt: ${s.cupidPick.map(id=>nameOf(s,id)).join(", ")||"—"}`)}</div>
+      ${rosterPanel(s)}
+    `, "phase-night");
+  }
+
+  function renderWolves(s){
+    const wolves = s.players.filter(p=>p.role==="werwolf");
+    setScene(`
+      <div class="panel">${narratorBlock("Die Werwölfe sind wach", `Wölfe: ${wolves.map(p=>p.name).join(", ")}. Aktuelles Ziel: <b>${s.wolfShared.target!=null?nameOf(s,s.wolfShared.target):"noch keins"}</b>`)}</div>
+      ${rosterPanel(s)}
+    `, "phase-wolves");
+  }
+
+  function renderSeer(s){
+    const seer = s.players.find(p=>p.role==="seherin");
+    setScene(`
+      <div class="panel">${narratorBlock("Die Seherin schaut", `${seer?seer.name:"Die Seherin"} blickt in die Zukunft. ${s.seerResult!=null?("Hat "+nameOf(s,s.seerResult)+" gesehen."):"Noch keine Wahl getroffen."}`)}</div>
+      ${rosterPanel(s)}
+    `, "phase-night");
+  }
+
+  function renderWitch(s){
+    const witch = s.players.find(p=>p.role==="hexe");
+    const victim = s.wolfShared.target!=null ? nameOf(s, s.wolfShared.target) : "niemand";
+    setScene(`
+      <div class="panel">${narratorBlock("Die Hexe entscheidet", `${witch?witch.name:"Die Hexe"} weiß: Die Wölfe wollen ${victim}. Heiltrank ${s.witch.healUsed?"verbraucht":"noch übrig"}, Gift ${s.witch.poisonUsed?"verbraucht":"noch übrig"}.`)}</div>
+      ${rosterPanel(s)}
+    `, "phase-night");
+  }
+
+  function renderMorning(s){
+    const lines = s.log.slice(-6);
+    setScene(`
+      <div class="panel">${narratorBlock("Der Morgen graut", "Lies die Ereignisse der Nacht vor.")}</div>
+      <div class="panel log">${lines.length?lines.map(l=>`<div class="line ${l.cls}">${l.text}</div>`).join(""):`<div class="line calm">Kein Vorfall zu berichten.</div>`}</div>
+      ${rosterPanel(s)}
+      <button class="btn" data-action="advance">Weiter</button>
+    `, "phase-day");
+  }
+
+  function renderHunter(s){
+    const hunterId = s.hunterQueue[0];
+    setScene(`
+      <div class="panel">${narratorBlock("Letzter Schuss", `${nameOf(s,hunterId)} (Jäger) wählt sein letztes Ziel. ${s.hunterTarget!=null?("Zielt auf "+nameOf(s,s.hunterTarget)):"Noch keine Wahl."}`)}</div>
+      ${rosterPanel(s)}
+    `, "phase-day");
+  }
+
+  function renderDayDiscuss(s){
+    const t = s.timer.seconds, total = s.timer.total;
+    const circumference = 2*Math.PI*78;
+    const offset = circumference*(1-Math.max(0,t/total));
+    const mm=String(Math.floor(t/60)).padStart(2,"0"), ss=String(t%60).padStart(2,"0");
+    setScene(`
+      <div class="panel">${narratorBlock("Tagesdiskussion", "Lass das Dorf diskutieren, dann öffne die Abstimmung.")}</div>
+      <div class="panel timer-wrap">
+        <svg class="ring" viewBox="0 0 180 180">
+          <circle class="bg" cx="90" cy="90" r="78"/>
+          <circle class="fg" cx="90" cy="90" r="78" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" transform="rotate(-90 90 90)"/>
+          <text class="ring-label" x="90" y="97">${mm}:${ss}</text>
+        </svg>
+        <div class="timer-controls">
+          <button class="round-btn" data-action="timer-adjust" data-delta="-30">-30s</button>
+          <button class="round-btn" data-action="timer-toggle">${t>0 && s.timer.running?"⏸":"▶"}</button>
+          <button class="round-btn" data-action="timer-adjust" data-delta="30">+30s</button>
+        </div>
+      </div>
+      ${rosterPanel(s)}
+      <button class="btn" data-action="to-vote">Zur Abstimmung</button>
+    `, "phase-day");
+  }
+
+  function renderDayVote(s){
+    const pool = s.voteRestrict || s.players.filter(p=>p.alive).map(p=>p.id);
+    const votedCount = Object.keys(s.voteTally).length ? Object.values(s.voteTally).reduce((a,b)=>a+b,0) : 0;
+    setScene(`
+      <div class="panel">${narratorBlock("Abstimmung läuft", s.voteRestrict ? "Stichwahl unter den Verdächtigen." : "Jede lebende Person stimmt auf ihrem Gerät ab.")}</div>
+      <div class="panel">
+        ${pool.map(id=>`<div class="vrow"><span class="pname">${nameOf(s,id)}</span><span class="vcount">${s.voteTally[id]||0}</span></div>`).join("")}
+        <p class="hint">Abgegebene Stimmen: ${votedCount}</p>
+      </div>
+      ${rosterPanel(s)}
+      <button class="btn danger" data-action="resolve-vote" ${votedCount>0?"":"disabled"}>Abstimmung schließen</button>
+    `, "phase-day");
+  }
+
+  function renderElimination(s){
+    const lines = s.log.slice(-3);
+    setScene(`
+      <div class="panel">${narratorBlock("Verbannung", "Verkünde, wer das Dorf verlassen muss.")}</div>
+      <div class="panel log">${lines.map(l=>`<div class="line ${l.cls}">${l.text}</div>`).join("")}</div>
+      ${rosterPanel(s)}
+      <button class="btn" data-action="advance">Weiter</button>
+    `, "phase-day");
+  }
+
+  function renderEnd(s){
+    const w = s.winner;
+    let title, cls=w.type;
+    if(cls==="village") title="Das Dorf hat gesiegt";
+    else if(cls==="wolves") title="Die Werwölfe haben gewonnen";
+    else title="Die Liebenden triumphieren";
+    setScene(`
+      <div class="end-banner ${cls}"><h2>${title}</h2></div>
+      ${rosterPanel(s)}
+      <button class="btn" data-action="restart">Neue Runde (gleiche Lobby)</button>
+    `, cls==="wolves"?"phase-wolves":"phase-day");
+  }
+
+  /* ---------- events ---------- */
+  document.getElementById("app").addEventListener("click", (e)=>{
+    const btn = e.target.closest("[data-action]");
+    if(!btn) return;
+    const action = btn.getAttribute("data-action");
+    if(action==="create-room"){ send({t:"createRoom"}); return; }
+    if(action==="kick"){ send({t:"kick", playerId: btn.getAttribute("data-id")}); return; }
+    if(action==="start-game"){ send({t:"startGame"}); return; }
+    if(action==="advance"){ send({t:"advance"}); return; }
+    if(action==="timer-toggle"){ send({t:"timerToggle"}); return; }
+    if(action==="timer-adjust"){ send({t:"timerAdjust", delta: Number(btn.getAttribute("data-delta"))}); return; }
+    if(action==="to-vote"){ send({t:"toVote"}); return; }
+    if(action==="resolve-vote"){ send({t:"resolveVote"}); return; }
+    if(action==="restart"){ send({t:"restart"}); return; }
+  });
+
+  (function seedStars(){
+    const el = document.getElementById("stars");
+    let html = "";
+    for(let i=0;i<60;i++){
+      const top=Math.random()*70, left=Math.random()*100, delay=(Math.random()*3).toFixed(2);
+      html += `<span class="star" style="top:${top}%; left:${left}%; animation-delay:${delay}s;"></span>`;
+    }
+    el.innerHTML = html;
+  })();
+
+  renderStart();
+  connect();
+})();
+</script>
+</body>
+</html>

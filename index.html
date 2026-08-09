@@ -1,115 +1,1406 @@
 <!doctype html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Werwölfe von Düsterwald</title>
-<meta name="description" content="Werwolf-Spielleiter fürs Handy: Rollenvergabe, Nachtphasen, Zufallsereignisse und ein Erzähler mit Stimme. Läuft ohne Anmeldung direkt im Browser.">
-<meta name="theme-color" content="#12101a">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='52' font-size='52'>🐺</text></svg>">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>WERWÖLFE — Nacht über Schattenmoor</title>
 <style>
   :root{
-    --nacht:#12101a; --nacht-hell:#1c1928; --karte:#241f33; --rand:#3a3350;
-    --schrift:#ece8f5; --leise:#a79fc0; --gold:#e8b64c; --blut:#c8434b;
-    --gruen:#5fb87a; --blau:#6a9fd4; --lila:#9b7fd4;
-    --rund:14px; --schatten:0 6px 24px rgba(0,0,0,.45);
+    --ink:#0d0e17;
+    --ink-2:#161927;
+    --ink-3:#1f2335;
+    --parchment:#eee3c8;
+    --parchment-dim:#b9ac8c;
+    --blood:#9a2f2f;
+    --blood-bright:#d1524a;
+    --moon:#c7d1de;
+    --moon-dim:#7d879b;
+    --moss:#6d8f6a;
+    --candle:#d79a3d;
+    --candle-bright:#f0b95c;
+    --violet:#8a6bb0;
+    --line: rgba(199,209,222,0.14);
+    --shadow: rgba(0,0,0,0.6);
+    --font-display: "Iowan Old Style","Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono","Cascadia Code", Menlo, Consolas, monospace;
   }
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
   body{
-    background:radial-gradient(ellipse at 50% -10%,#241f38 0%,var(--nacht) 60%);
-    background-attachment:fixed; min-height:100vh;
-    color:var(--schrift); font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    padding:16px 14px 48px; max-width:720px; margin:0 auto;
+    background: radial-gradient(ellipse at 50% -10%, #232a44 0%, var(--ink) 55%, #070810 100%);
+    color: var(--parchment);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+    transition: background 1.4s ease;
   }
-  h1{font-size:1.5rem;margin:.2em 0 .1em;letter-spacing:.01em}
-  h2{font-size:1.12rem;margin:1.4em 0 .5em;color:var(--gold)}
-  h3{font-size:1rem;margin:1.1em 0 .35em}
-  p{margin:.5em 0}
-  .unter{color:var(--leise);font-size:.9rem;margin:0 0 1.2em}
+  body.phase-day{
+    background: radial-gradient(ellipse at 50% -10%, #3a3320 0%, #201c14 55%, #0e0c08 100%);
+  }
+  body.phase-wolves{
+    background: radial-gradient(ellipse at 50% -10%, #3a1414 0%, #180909 55%, #060404 100%);
+  }
 
-  .karte{background:var(--karte);border:1px solid var(--rand);border-radius:var(--rund);
-         padding:16px;margin:12px 0;box-shadow:var(--schatten)}
-  .karte.hell{background:var(--nacht-hell)}
-  .karte.warn{border-color:var(--gold);background:#2a2418}
-  .karte.blut{border-color:var(--blut);background:#2a1a1d}
+  h1,h2,h3{ font-family: var(--font-display); text-wrap: balance; margin:0; }
+  .eyebrow{
+    font-family: var(--font-body);
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--candle);
+    font-weight: 600;
+  }
 
-  button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:12px 16px;
-         background:var(--lila);color:#fff;cursor:pointer;transition:filter .15s}
-  button:hover:not(:disabled){filter:brightness(1.15)}
-  button:disabled{opacity:.4;cursor:not-allowed}
-  button.gross{width:100%;padding:16px;font-size:1.05rem;margin-top:10px}
-  button.zweit{background:#3a3350}
-  button.gefahr{background:var(--blut)}
-  button.gut{background:var(--gruen)}
+  /* ambient layers */
+  .sky{ position:fixed; inset:0; overflow:hidden; z-index:0; pointer-events:none; }
+  .stars{ position:absolute; inset:0; opacity:0.9; transition:opacity 1s ease; }
+  body.phase-day .stars, body.phase-wolves .stars{ opacity:0; }
+  .star{ position:absolute; width:2px; height:2px; background:var(--moon); border-radius:50%; }
+  @media (prefers-reduced-motion: no-preference){
+    .star{ animation: twinkle 3.2s ease-in-out infinite; }
+  }
+  @keyframes twinkle{ 0%,100%{opacity:.15} 50%{opacity:1} }
+  .fog{ position:absolute; bottom:-10%; width:160%; height:40%; left:-30%;
+    background: radial-gradient(ellipse at 50% 50%, rgba(120,140,160,0.10), transparent 70%);
+    filter: blur(6px);
+  }
+  @media (prefers-reduced-motion: no-preference){
+    .fog{ animation: drift 26s linear infinite; }
+    .fog.f2{ animation-duration: 40s; animation-direction: reverse; bottom:-20%; }
+  }
+  @keyframes drift{ from{ transform:translateX(-4%); } to{ transform:translateX(4%); } }
+  .moonshape{ position:absolute; top:6%; right:10%; width:74px; height:74px; border-radius:50%;
+    background: radial-gradient(circle at 35% 35%, #f4efe0, var(--moon) 70%);
+    box-shadow: 0 0 60px 10px rgba(199,209,222,0.25);
+    opacity:0.9; transition: opacity 1s ease, transform 1.2s ease;
+  }
+  body.phase-day .moonshape{ opacity:0; transform: translateY(-30px); }
 
-  input,select{font:inherit;width:100%;padding:11px 12px;border-radius:10px;
-               border:1px solid var(--rand);background:#1a1626;color:var(--schrift)}
-  label{display:block;margin:.7em 0 .25em;font-size:.9rem;color:var(--leise)}
+  #app{ position:relative; z-index:1; min-height:100vh; display:flex; flex-direction:column; align-items:center; padding: 28px 18px 60px; }
 
-  .reihe{display:flex;gap:8px;align-items:center}
-  .reihe > *{flex:1}
-  .reihe button{flex:0 0 auto}
-  .gitter{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .topbar{ width:100%; max-width:520px; display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; gap:10px; }
+  .brand{ display:flex; align-items:center; gap:8px; }
+  .brand svg{ width:22px; height:22px; color:var(--candle); }
+  .brand span{ font-family:var(--font-display); letter-spacing:0.08em; font-size:0.95rem; color:var(--parchment-dim); }
+  .night-counter{ font-family:var(--font-mono); font-size:0.75rem; color:var(--moon-dim); letter-spacing:0.05em; }
+  .topbar-right{ display:flex; align-items:center; gap:10px; }
+  .sound-toggle{ width:34px; height:34px; border-radius:50%; border:1px solid var(--line); background:var(--ink-2); color:var(--moon); cursor:pointer; display:flex; align-items:center; justify-content:center; flex:none; }
+  .sound-toggle:hover{ border-color: var(--candle); }
+  .sound-toggle svg{ width:16px; height:16px; }
 
-  .spieler{display:flex;align-items:center;gap:10px;padding:9px 12px;margin:5px 0;
-           background:#1a1626;border:1px solid var(--rand);border-radius:10px}
-  .spieler.tot{opacity:.45;text-decoration:line-through}
-  .spieler .sym{font-size:1.3rem}
-  .spieler .name{flex:1;font-weight:600}
-  .spieler .zusatz{font-size:.8rem;color:var(--leise)}
+  .scene{ width:100%; max-width:520px; display:flex; flex-direction:column; gap:18px; }
+  .scene.enter{ animation: sceneIn .5s ease both; }
+  @keyframes sceneIn{ from{ opacity:0; transform: translateY(10px);} to{ opacity:1; transform:translateY(0);} }
 
-  .marke{display:inline-block;font-size:.75rem;padding:2px 9px;border-radius:20px;
-         background:var(--rand);color:var(--schrift);margin-left:6px}
-  .marke.wolf{background:#4a2226;color:#ffb3b8}
-  .marke.dorf{background:#1f3a29;color:#a8e6bd}
-  .marke.solo{background:#3a2f14;color:var(--gold)}
+  .panel{
+    background: linear-gradient(180deg, var(--ink-2), var(--ink-3));
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 24px;
+    box-shadow: 0 20px 50px -20px var(--shadow);
+  }
 
-  .ereignis{border-left:4px solid var(--gold);padding:12px 14px;background:#241f14;
-            border-radius:0 10px 10px 0;margin:12px 0}
-  .ereignis h3{margin:0 0 .3em;color:var(--gold);font-size:.95rem;
-               text-transform:uppercase;letter-spacing:.06em}
-  .ereignis p{margin:0;font-style:italic}
+  .narrator{
+    display:flex; gap:14px; align-items:flex-start;
+    background: linear-gradient(180deg, rgba(215,154,61,0.09), rgba(215,154,61,0.02));
+    border:1px solid rgba(215,154,61,0.25);
+    border-radius:16px; padding:16px 18px;
+  }
+  .narrator svg{ width:34px; height:34px; flex:none; color:var(--candle); margin-top:2px; }
+  .narrator .say{ font-family: var(--font-display); font-style:italic; font-size:1.05rem; line-height:1.5; color: var(--parchment); }
+  .narrator .say b{ font-style:normal; color:var(--candle-bright); }
+  .narrator .tag{ display:block; font-family:var(--font-body); font-style:normal; font-size:0.68rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--candle); margin-bottom:5px; }
 
-  .rollenkarte{text-align:center;padding:32px 20px}
-  .rollenkarte .sym{font-size:4.5rem;line-height:1}
-  .rollenkarte .rname{font-size:1.6rem;font-weight:700;margin:.25em 0}
-  .rollenkarte .rtext{color:var(--leise);max-width:34ch;margin:.6em auto 0}
+  h2.title{ font-size:1.5rem; letter-spacing:0.02em; color: var(--parchment); }
+  p.lead{ color: var(--parchment-dim); font-size:0.92rem; line-height:1.55; margin:6px 0 0; }
 
-  .protokoll{max-height:300px;overflow-y:auto;font-size:.88rem}
-  .protokoll div{padding:5px 0;border-bottom:1px solid #2a2440}
-  .protokoll .tod{color:#ff9ba2}
-  .protokoll .ereignis-z{color:var(--gold)}
-  .protokoll .phase{color:var(--blau);font-weight:600}
-  .protokoll .geheim{color:var(--lila)}
+  .btn{
+    font-family: var(--font-body); font-weight:600; font-size:0.88rem; letter-spacing:0.02em;
+    padding: 13px 20px; border-radius:12px; border:1px solid transparent; cursor:pointer;
+    background: var(--candle); color:#231605; transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+    width:100%;
+  }
+  .btn:hover{ transform: translateY(-1px); box-shadow: 0 8px 20px -8px rgba(215,154,61,0.55); }
+  .btn:active{ transform: translateY(0); }
+  .btn:disabled{ opacity:0.35; cursor:not-allowed; transform:none; box-shadow:none; }
+  .btn.secondary{ background: transparent; color: var(--moon); border:1px solid var(--line); }
+  .btn.secondary:hover{ box-shadow: 0 8px 20px -8px rgba(199,209,222,0.25); }
+  .btn.danger{ background: var(--blood); color: var(--parchment); }
+  .btn.danger:hover{ box-shadow: 0 8px 20px -8px rgba(154,47,47,0.6); }
+  .btn.ghost{ background:transparent; border:none; color:var(--moon-dim); text-decoration:underline; width:auto; padding:6px 0; font-weight:500; }
+  .row{ display:flex; gap:10px; }
+  .row > *{ flex:1; }
+  :focus-visible{ outline: 2px solid var(--candle-bright); outline-offset: 2px; }
 
-  .schalter{display:flex;align-items:center;gap:10px;margin:.6em 0}
-  .schalter input{width:auto;flex:0 0 auto;transform:scale(1.25)}
-  .schalter label{margin:0;color:var(--schrift)}
+  /* setup */
+  .stepper{ display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  .stepper .count{ font-family:var(--font-display); font-size:2.2rem; color:var(--candle-bright); min-width:52px; text-align:center; font-variant-numeric: tabular-nums; }
+  .round-btn{ width:42px; height:42px; border-radius:50%; border:1px solid var(--line); background:var(--ink); color:var(--parchment); font-size:1.2rem; cursor:pointer; }
+  .round-btn:hover{ background: var(--ink-3); }
+  .hint{ font-size:0.78rem; color: var(--moon-dim); margin-top:4px; }
 
-  .fuss{margin-top:32px;padding-top:16px;border-top:1px solid var(--rand);
-        color:var(--leise);font-size:.82rem;text-align:center}
-  .fuss a{color:var(--lila)}
-  .versteckt{display:none}
-  @media (prefers-reduced-motion:no-preference){
-    .karte{animation:auf .25s ease}
-    @keyframes auf{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .namelist{ display:flex; flex-direction:column; gap:8px; margin-top:14px; max-height: 320px; overflow-y:auto; padding-right:4px; }
+  .namelist input{
+    width:100%; padding:11px 13px; border-radius:10px; border:1px solid var(--line);
+    background: var(--ink); color: var(--parchment); font-family:var(--font-body); font-size:0.92rem;
+  }
+  .namelist input:focus{ border-color: var(--candle); }
+
+  .comp-preview{ display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .chip{ font-size:0.72rem; padding:5px 10px; border-radius:999px; border:1px solid var(--line); color:var(--parchment-dim); background:var(--ink); }
+  .chip b{ color:var(--parchment); }
+
+  /* role card */
+  .card-stage{ perspective: 1200px; }
+  .card{
+    position:relative; width:100%; aspect-ratio: 3/4; max-height:480px; margin:0 auto;
+    transform-style: preserve-3d; transition: transform .7s cubic-bezier(.4,.1,.2,1);
+    cursor:pointer;
+  }
+  .card.flipped{ transform: rotateY(180deg); }
+  .face{
+    position:absolute; inset:0; border-radius:20px; backface-visibility:hidden;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:26px;
+    border:1px solid var(--line);
+  }
+  .face.back{
+    background:
+      repeating-linear-gradient(135deg, rgba(199,209,222,0.05) 0 2px, transparent 2px 14px),
+      linear-gradient(160deg, var(--ink-3), var(--ink));
+  }
+  .face.back svg{ width:64px; height:64px; color: var(--moon-dim); opacity:0.7; }
+  .face.back .tap{ margin-top:16px; font-size:0.75rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--moon-dim); }
+  .face.front{
+    transform: rotateY(180deg);
+    background: linear-gradient(170deg, var(--ink-3) 0%, var(--ink-2) 60%, var(--ink) 100%);
+  }
+  .face.front .icon-wrap{ width:96px; height:96px; margin-bottom:10px; }
+  .face.front .icon-wrap svg{ width:100%; height:100%; }
+  .role-name{ font-family:var(--font-display); font-size:1.6rem; margin-top:4px; }
+  .role-team{ font-size:0.68rem; letter-spacing:0.16em; text-transform:uppercase; margin-top:4px; }
+  .role-team.wolf{ color: var(--blood-bright); }
+  .role-team.village{ color: var(--moss); }
+  .role-flavor{ font-family:var(--font-display); font-style:italic; font-size:0.92rem; color:var(--parchment-dim); margin-top:14px; line-height:1.5; }
+  .role-mechanic{ font-size:0.8rem; color: var(--moon); margin-top:12px; line-height:1.5; border-top:1px dashed var(--line); padding-top:12px; }
+  .role-companions{ font-size:0.76rem; color: var(--candle); margin-top:10px; }
+
+  /* reveal pass screen */
+  .pass-card{ text-align:center; padding: 50px 24px; }
+  .pass-card svg{ width:46px; height:46px; color:var(--moon-dim); margin-bottom:14px; }
+  .pass-name{ font-family:var(--font-display); font-size:1.8rem; color:var(--parchment); margin:6px 0 2px; }
+
+  /* player grid (targeting) */
+  .grid{ display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; margin-top:14px; }
+  .pchip{
+    display:flex; align-items:center; gap:10px; padding:12px; border-radius:12px; border:1px solid var(--line);
+    background:var(--ink); cursor:pointer; text-align:left; font-family:var(--font-body); color:var(--parchment);
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .pchip:hover{ border-color: var(--candle); }
+  .pchip.selected{ border-color: var(--candle-bright); background: rgba(215,154,61,0.12); }
+  .pchip.dead{ opacity:0.35; cursor:default; text-decoration: line-through; }
+  .avatar{ width:30px; height:30px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-display); font-size:0.9rem; background: var(--ink-3); color: var(--moon); }
+  .avatar.dead{ background: var(--blood); color:var(--parchment); }
+  .pname{ font-size:0.88rem; }
+
+  /* vote tally */
+  .vrow{ display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; margin-bottom:8px; background:var(--ink); }
+  .vrow .pname{ flex:1; }
+  .vcount{ font-family:var(--font-mono); font-size:1.1rem; min-width:28px; text-align:center; color:var(--candle-bright); }
+  .vbtn{ width:32px; height:32px; border-radius:8px; border:1px solid var(--line); background:var(--ink-3); color:var(--parchment); cursor:pointer; font-size:1rem; }
+  .vbtn:hover{ background: var(--ink-2); }
+
+  /* timer ring */
+  .timer-wrap{ display:flex; flex-direction:column; align-items:center; gap:16px; padding: 10px 0 6px; }
+  .ring{ width:180px; height:180px; }
+  .ring circle{ fill:none; stroke-width:8; }
+  .ring .bg{ stroke: var(--line); }
+  .ring .fg{ stroke: var(--candle); stroke-linecap:round; transition: stroke .4s ease; }
+  .ring-label{ font-family:var(--font-mono); font-size:1.6rem; fill:var(--parchment); text-anchor:middle; font-variant-numeric: tabular-nums; }
+  .timer-controls{ display:flex; gap:8px; }
+  .timer-controls .round-btn{ width:36px; height:36px; font-size:0.9rem; }
+
+  /* random day event */
+  .event-card{
+    border:1px solid rgba(138,107,176,0.42);
+    background: linear-gradient(180deg, rgba(138,107,176,0.16), rgba(138,107,176,0.03));
+    border-radius:16px; padding:15px 17px;
+  }
+  @media (prefers-reduced-motion: no-preference){
+    .event-card{ animation: eventIn .55s cubic-bezier(.2,.8,.2,1) both; }
+  }
+  @keyframes eventIn{ from{ opacity:0; transform: translateY(-6px) scale(.98); } to{ opacity:1; transform:none; } }
+  .event-card.compact{ padding:11px 14px; }
+  .event-tag{ font-size:0.66rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--violet); font-weight:700; margin-bottom:6px; }
+  .event-card.compact .event-text{ font-size:0.82rem; }
+  .event-text{ font-size:0.9rem; line-height:1.5; color:var(--parchment); }
+  .event-text b{ color:#cbb4e8; }
+  .sleep-badge{ font-size:0.66rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--violet); border:1px solid rgba(138,107,176,0.45); border-radius:999px; padding:2px 7px; }
+
+  .log{ margin-top:10px; display:flex; flex-direction:column; gap:6px; }
+  .log .line{ font-size:0.85rem; color: var(--parchment-dim); padding-left:14px; border-left:2px solid var(--line); }
+  .log .line.death{ color: var(--blood-bright); border-color: var(--blood); }
+  .log .line.calm{ color: var(--moss); border-color: var(--moss); }
+
+  /* end screen */
+  .end-banner{ text-align:center; padding: 30px 20px; border-radius:18px; position:relative; overflow:hidden; }
+  .end-banner.village{ background: linear-gradient(180deg, rgba(109,143,106,0.18), rgba(109,143,106,0.02)); border:1px solid rgba(109,143,106,0.35); }
+  .end-banner.wolves{ background: linear-gradient(180deg, rgba(154,47,47,0.22), rgba(154,47,47,0.03)); border:1px solid rgba(154,47,47,0.4); }
+  .end-banner.lovers{ background: linear-gradient(180deg, rgba(138,107,176,0.2), rgba(138,107,176,0.03)); border:1px solid rgba(138,107,176,0.4); }
+  .end-banner h2{ font-size:2rem; }
+  .end-banner p{ color: var(--parchment-dim); margin-top:8px; }
+  .particle{ position:absolute; border-radius:50%; pointer-events:none; }
+  @media (prefers-reduced-motion: no-preference){
+    .particle{ animation: fall linear forwards; }
+  }
+  @keyframes fall{ from{ transform: translateY(-20px) rotate(0deg); opacity:1; } to{ transform: translateY(220px) rotate(220deg); opacity:0; } }
+
+  .roster-recap{ display:flex; flex-direction:column; gap:6px; margin-top:16px; }
+  .roster-recap .rr{ display:flex; justify-content:space-between; font-size:0.85rem; padding:8px 10px; border-radius:8px; background:var(--ink); }
+  .roster-recap .rr.dead-r{ opacity:0.6; }
+  .rr .rn{ color: var(--parchment); }
+  .rr .rr-role{ color: var(--moon-dim); }
+
+  .footer-note{ text-align:center; font-size:0.72rem; color: var(--moon-dim); margin-top:26px; letter-spacing:0.02em; }
+
+  @media (max-width:420px){
+    .grid{ grid-template-columns: 1fr; }
+    .panel{ padding:18px; }
   }
 </style>
 </head>
 <body>
-
-<h1>🐺 Werwölfe von Düsterwald</h1>
-<p class="unter">Spielleiter fürs Handy — mit Erzähler, Zufallsereignissen und automatischer Rollenverteilung.</p>
-
-<div id="buehne"></div>
-
-<div class="fuss">
-  Ein Gerät reicht für die ganze Runde. Es wird nichts gespeichert und nichts gesendet.<br>
-  <a href="https://github.com/lionboomer/werwolf">Quellcode auf GitHub</a>
+<div class="sky" id="sky">
+  <div class="stars" id="stars"></div>
+  <div class="fog"></div>
+  <div class="fog f2"></div>
+  <div class="moonshape"></div>
 </div>
+<div id="app">
+  <div class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="4"><path d="M50 8c11 10 11 26 0 34-11-8-11-24 0-34z"/><path d="M20 70c8-14 22-20 30-20s22 6 30 20"/></svg>
+      <span>SCHATTENMOOR</span>
+    </div>
+    <div class="topbar-right">
+      <div class="night-counter" id="nightCounter"></div>
+      <button type="button" class="sound-toggle" id="soundToggle" data-action="sound-toggle" aria-label="Ton umschalten"></button>
+    </div>
+  </div>
+  <div class="scene enter" id="scene"></div>
+  <div class="footer-note">Werwölfe von Schattenmoor · Reiche ein Gerät im Kreis herum</div>
+</div>
+<script>
+(function(){
+  "use strict";
 
-<script src="spiel.js"></script>
-<script src="oberflaeche.js"></script>
+  /* ---------- sound (synthesized, no external assets) ---------- */
+  const SOUND_ON_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M17 8c1.5 1.5 1.5 6.5 0 8"/><path d="M19.5 5.5c3 3 3 10 0 13"/></svg>`;
+  const SOUND_OFF_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16 9l6 6M22 9l-6 6"/></svg>`;
+
+  let soundEnabled = true;
+  try{ const stored = localStorage.getItem("schattenmoor-sound"); if(stored==="off") soundEnabled=false; }catch(e){}
+
+  let actx = null;
+  function ac(){
+    if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ actx=null; } }
+    if(actx && actx.state==="suspended"){ actx.resume().catch(()=>{}); }
+    return actx;
+  }
+
+  function tone(freq, dur, opts){
+    if(!soundEnabled) return;
+    const ctx = ac(); if(!ctx) return;
+    opts = opts||{};
+    const t0 = ctx.currentTime + (opts.delay||0);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = opts.type || "sine";
+    osc.frequency.setValueAtTime(freq, t0);
+    if(opts.sweepTo) osc.frequency.linearRampToValueAtTime(opts.sweepTo, t0+dur);
+    const peak = opts.gain!==undefined ? opts.gain : 0.08;
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(peak, t0+Math.min(0.03,dur/3));
+    gain.gain.exponentialRampToValueAtTime(0.0008, t0+dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0); osc.stop(t0+dur+0.05);
+  }
+
+  let ambient = null;
+  function ambientStart(){
+    if(!soundEnabled){ return; }
+    const ctx = ac(); if(!ctx || ambient) return;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, ctx.currentTime);
+    g.gain.linearRampToValueAtTime(0.028, ctx.currentTime+1.4);
+    const o1 = ctx.createOscillator(); o1.type="sine"; o1.frequency.value=64;
+    const o2 = ctx.createOscillator(); o2.type="sine"; o2.frequency.value=96;
+    const lfo = ctx.createOscillator(); lfo.type="sine"; lfo.frequency.value=0.09;
+    const lfoGain = ctx.createGain(); lfoGain.gain.value=0.012;
+    lfo.connect(lfoGain); lfoGain.connect(g.gain);
+    o1.connect(g); o2.connect(g); g.connect(ctx.destination);
+    o1.start(); o2.start(); lfo.start();
+    ambient = {g,o1,o2,lfo};
+  }
+  function ambientStop(){
+    if(!ambient) return;
+    const ctx = ac();
+    const {g,o1,o2,lfo} = ambient;
+    if(ctx){ g.gain.linearRampToValueAtTime(0, ctx.currentTime+0.6); }
+    setTimeout(()=>{ try{ o1.stop(); o2.stop(); lfo.stop(); }catch(e){} }, 700);
+    ambient = null;
+  }
+
+  const sfx = {
+    tap(){ tone(520, 0.05, {type:"sine", gain:0.03}); },
+    flip(){ tone(300, 0.22, {type:"triangle", sweepTo:520, gain:0.06}); },
+    reveal(){ tone(660, 0.35, {type:"sine", sweepTo:880, gain:0.05}); },
+    howl(){
+      if(!soundEnabled) return;
+      tone(220, 1.1, {type:"sawtooth", sweepTo:340, gain:0.05, delay:0});
+      tone(180, 1.3, {type:"sine", sweepTo:120, gain:0.06, delay:0.15});
+    },
+    chime(){ tone(523,0.4,{type:"sine",gain:0.05}); tone(659,0.4,{type:"sine",gain:0.045,delay:0.12}); tone(784,0.5,{type:"sine",gain:0.04,delay:0.24}); },
+    gather(){ tone(392,0.5,{type:"triangle",gain:0.05}); tone(392,0.5,{type:"triangle",gain:0.04,delay:0.28}); },
+    bell(){ tone(196,0.9,{type:"triangle",gain:0.06}); tone(294,0.9,{type:"sine",gain:0.03,delay:0.02}); },
+    village(){ tone(523,0.3,{gain:0.06}); tone(659,0.3,{delay:0.15,gain:0.06}); tone(784,0.5,{delay:0.3,gain:0.06}); tone(1046,0.6,{delay:0.45,gain:0.05}); },
+    wolves(){ tone(220,0.5,{type:"sawtooth",gain:0.05}); tone(180,0.6,{type:"sawtooth",delay:0.2,gain:0.05}); tone(110,1.1,{type:"sine",delay:0.35,gain:0.07}); },
+    lovers(){ tone(440,0.4,{gain:0.05}); tone(554,0.4,{delay:0.15,gain:0.05}); tone(659,0.6,{delay:0.3,gain:0.05}); },
+    setAmbient(on){ if(on) ambientStart(); else ambientStop(); }
+  };
+
+  function setSoundEnabled(v){
+    soundEnabled = v;
+    try{ localStorage.setItem("schattenmoor-sound", v?"on":"off"); }catch(e){}
+    if(!v){ ambientStop(); if('speechSynthesis' in window){ try{ window.speechSynthesis.cancel(); }catch(e){} } }
+    updateSoundToggleDom();
+  }
+  function updateSoundToggleDom(){
+    const btn = document.getElementById("soundToggle");
+    if(btn) btn.innerHTML = soundEnabled ? SOUND_ON_ICON : SOUND_OFF_ICON;
+  }
+
+  /* ---------- narrator voice (Web Speech API, no external assets) ---------- */
+  let voiceCache = [];
+  let lastSpokenText = "";
+  if('speechSynthesis' in window){
+    const loadVoices = () => { voiceCache = window.speechSynthesis.getVoices(); };
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }
+  function stripTags(html){ return html.replace(/<[^>]*>/g, "").replace(/\s+/g," ").trim(); }
+  // Several blocks on one screen may each ask to be spoken; collect them and
+  // read them as a single utterance, otherwise each new call cuts off the last.
+  let speechBuffer = [];
+  let speechFlush = null;
+  function speak(html){
+    if(!soundEnabled) return;
+    if(!('speechSynthesis' in window)) return;
+    const text = stripTags(html);
+    if(!text) return;
+    speechBuffer.push(text);
+    if(speechFlush) clearTimeout(speechFlush);
+    speechFlush = setTimeout(flushSpeech, 0);
+  }
+  function flushSpeech(){
+    speechFlush = null;
+    const text = speechBuffer.join(" ");
+    speechBuffer = [];
+    if(!text || text === lastSpokenText) return;
+    lastSpokenText = text;
+    try{
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "de-DE";
+      u.rate = 0.95;
+      u.pitch = 0.82;
+      const deVoice = voiceCache.find(v=>v.lang && v.lang.toLowerCase().startsWith("de"));
+      if(deVoice) u.voice = deVoice;
+      window.speechSynthesis.speak(u);
+    }catch(e){ /* narration must never block gameplay */ }
+  }
+
+  /* ---------- icons ---------- */
+  const ICON = {
+    narrator: `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M30 44c0-16 9-30 20-30s20 14 20 30c0 18-9 34-20 34s-20-16-20-34z"/><path d="M40 42c1-4 4-6 10-6s9 2 10 6" /><ellipse cx="41" cy="46" rx="3.4" ry="5" fill="currentColor" stroke="none"/><ellipse cx="59" cy="46" rx="3.4" ry="5" fill="currentColor" stroke="none"/><path d="M50 6c6 4 8 9 8 9s-6-2-8-2-8 2-8-2 2-5 8-7z" fill="currentColor" stroke="none"/></svg>`,
+    werwolf: `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M76 18a24 24 0 1 1-2 26" stroke-dasharray="2 5" opacity=".55"/><path d="M30 30 20 12l14 8" fill="currentColor" stroke="none" opacity=".9"/><path d="M70 30 80 12l-14 8" fill="currentColor" stroke="none" opacity=".9"/><path d="M22 52c2-16 12-26 28-26s26 10 28 26c1 10-4 16-4 24-6-6-10-8-24-8s-18 2-24 8c0-8-5-14-4-24z"/><path d="M50 52l-6 12h12l-6-12z" fill="currentColor" stroke="none"/><circle cx="38" cy="42" r="2.6" fill="currentColor" stroke="none"/><circle cx="62" cy="42" r="2.6" fill="currentColor" stroke="none"/></svg>`,
+    dorfbewohner: `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M50 14 86 42v6H14v-6L50 14z"/><path d="M24 46v34h52V46"/><path d="M42 80V58h16v22"/><path d="M60 8v10" stroke-width="2.4"/></svg>`,
+    seherin: `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M10 50c10-18 26-27 40-27s30 9 40 27c-10 18-26 27-40 27S20 68 10 50z"/><circle cx="50" cy="50" r="13"/><circle cx="50" cy="50" r="3.6" fill="currentColor" stroke="none"/><path d="M50 10v8M50 82v8M15 25l6 6M85 25l-6 6" stroke-width="2.4" opacity=".7"/></svg>`,
+    hexe: `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M40 14h20l4 18h-28z"/><path d="M36 32h28l6 44a10 10 0 0 1-10 10H40a10 10 0 0 1-10-10z"/><path d="M40 56c4-4 8-4 10 0s6 4 10 0" opacity=".8"/><circle cx="42" cy="70" r="2.4" fill="currentColor" stroke="none"/><circle cx="58" cy="66" r="2.4" fill="currentColor" stroke="none"/><path d="M28 32c-6 0-10-4-10-4M72 32c6 0 10-4 10-4" stroke-width="2.4"/></svg>`,
+    jaeger: `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M18 50c8-14 18-22 32-22s24 8 32 22" /><path d="M14 50h72" stroke-width="2.6"/><path d="M50 22v56" stroke-dasharray="1 6" opacity=".7"/><path d="M60 40 88 12" stroke-width="3.6"/><path d="M88 12l-10 1 9-9-1 8z" fill="currentColor" stroke="none"/></svg>`,
+    amor: `<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M50 78C24 60 16 44 24 32c6-9 20-9 26 2 6-11 20-11 26-2 8 12 0 28-26 46z"/><path d="M8 26l84 0" stroke-width="2.4" opacity=".6"/><path d="M86 26 76 20l0 12z" fill="currentColor" stroke="none"/></svg>`
+  };
+
+  const ROLES = {
+    werwolf: {
+      name: "Werwolf", team:"wolf", icon: ICON.werwolf,
+      flavor: "Bei Vollmond erwacht der Hunger. Das Fell wächst, die Augen glühen – und im Dorf schläft jemand seinen letzten Schlaf.",
+      mechanic: "Jede Nacht bestimmst du gemeinsam mit den anderen Werwölfen ein Opfer. Ziel: Überlebt, bis ihr dem Dorf an Zahl ebenbürtig seid."
+    },
+    dorfbewohner: {
+      name: "Dorfbewohner", team:"village", icon: ICON.dorfbewohner,
+      flavor: "Kein Zauber, keine Klaue – nur wache Augen, ein rascher Verstand und der Mut, laut Verdacht zu äußern.",
+      mechanic: "Keine Nachtaktion. Am Tag stimmst du mit ab, wer des Dorfes verwiesen wird. Ziel: alle Werwölfe enttarnen."
+    },
+    seherin: {
+      name: "Seherin", team:"village", icon: ICON.seherin,
+      flavor: "In ihren Träumen zeigt sich, wessen Herz vom Wolf befallen ist – ein Blick genügt, die Wahrheit zu ahnen.",
+      mechanic: "Einmal pro Nacht darfst du heimlich die wahre Rolle einer Person sehen."
+    },
+    hexe: {
+      name: "Hexe", team:"village", icon: ICON.hexe,
+      flavor: "Zwei Fläschchen im Kessel: eines heilt, eines tötet. Beide brennen im ganzen Spiel nur ein einziges Mal.",
+      mechanic: "Du erfährst, wen die Werwölfe angegriffen haben. Einmal im Spiel darfst du dieses Opfer retten, einmal darfst du eine beliebige Person vergiften."
+    },
+    jaeger: {
+      name: "Jäger", team:"village", icon: ICON.jaeger,
+      flavor: "Sein letzter Atemzug gehört noch dem Abzug. Fällt er, fällt niemand allein.",
+      mechanic: "Stirbst du – nachts oder durch die Dorfabstimmung – gibst du sofort einen letzten Schuss ab und reißt eine weitere Person mit dir."
+    },
+    amor: {
+      name: "Amor", team:"village", icon: ICON.amor,
+      flavor: "In der ersten Nacht verknüpft er zwei Herzen mit einem unsichtbaren Faden – komme, was wolle, sie gehen gemeinsam.",
+      mechanic: "In der ersten Nacht wählst du zwei Spieler als Verliebte. Stirbt einer der beiden, stirbt der andere aus Kummer mit."
+    }
+  };
+  const NARRATOR_ICON = ICON.narrator;
+
+  const DIST = {
+    5:  {werwolf:1, seherin:1, dorfbewohner:3},
+    6:  {werwolf:1, seherin:1, dorfbewohner:4},
+    7:  {werwolf:2, seherin:1, hexe:1, dorfbewohner:3},
+    8:  {werwolf:2, seherin:1, hexe:1, jaeger:1, dorfbewohner:3},
+    9:  {werwolf:2, seherin:1, hexe:1, jaeger:1, amor:1, dorfbewohner:3},
+    10: {werwolf:3, seherin:1, hexe:1, jaeger:1, amor:1, dorfbewohner:3},
+    11: {werwolf:3, seherin:1, hexe:1, jaeger:1, amor:1, dorfbewohner:4},
+    12: {werwolf:3, seherin:1, hexe:1, jaeger:1, amor:1, dorfbewohner:5}
+  };
+
+  /* ---------- state ---------- */
+  let S = null;
+
+  function freshSetup(){
+    return { screen:"setup", count:8, names: Array.from({length:8}, (_,i)=>"") };
+  }
+
+  function initGame(count, names){
+    const dist = DIST[count];
+    let pool = [];
+    Object.entries(dist).forEach(([role,n])=>{ for(let i=0;i<n;i++) pool.push(role); });
+    // shuffle
+    for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+    const players = names.map((n,i)=>({
+      id:i, name: (n&&n.trim())||("Spieler "+(i+1)), role: pool[i], alive:true, lover:null
+    }));
+    S = {
+      screen:"reveal", players, revealIndex:0, cardFlipped:false,
+      night:1, log:[],
+      wolfIds: players.filter(p=>p.role==="werwolf").map(p=>p.id),
+      cupidDone:false,
+      witchHealUsed:false, witchPoisonUsed:false,
+      night_wolfTarget:null, night_seerTarget:null, night_witchHeal:null, night_witchPoisonTarget:null, night_witchStep:"ask-heal",
+      cupidPick:[],
+      hunterQueue:[], afterResolutionTarget:null, pendingResolutionDeaths:[],
+      voteTally:{}, voteRestrict:null,
+      timerSeconds:DEFAULT_DISCUSSION, timerTotal:DEFAULT_DISCUSSION, timerRunning:false, timerHandle:null,
+      dayEvent:null, sleepPrefix:null,
+      winner:null
+    };
+  }
+
+  function alive(){ return S.players.filter(p=>p.alive); }
+  function byId(id){ return S.players.find(p=>p.id===id); }
+  function pushLog(text, cls){ S.log.push({text, cls: cls||""}); }
+
+  function applyDeaths(ids, causeMap){
+    const newlyDead = [];
+    ids.forEach(id=>{
+      const p = byId(id);
+      if(p && p.alive){ p.alive=false; newlyDead.push(p); }
+    });
+    newlyDead.forEach(p=>{
+      const cause = causeMap[p.id] || "unbekannt";
+      if(cause==="wolf" && p.role==="werwolf") pushLog(`Das Rudel hat sich in dieser Nacht selbst zerfleischt: ${p.name} war ein Werwolf.`, "death");
+      else if(cause==="wolf") pushLog(`${p.name} wurde in der Nacht von den Werwölfen gerissen. Rolle: ${ROLES[p.role].name}.`, "death");
+      else if(cause==="gift") pushLog(`${p.name} atmete Gift ein und starb im Schlaf. Rolle: ${ROLES[p.role].name}.`, "death");
+      else if(cause==="liebe") pushLog(`Aus Kummer um die verlorene Liebe stirbt auch ${p.name}. Rolle: ${ROLES[p.role].name}.`, "death");
+      else if(cause==="jaeger") pushLog(`Der letzte Schuss des Jägers trifft ${p.name}. Rolle: ${ROLES[p.role].name}.`, "death");
+      else if(cause==="vote") pushLog(`Das Dorf verbannt ${p.name}. Zum Vorschein kommt: ${ROLES[p.role].name}!`, "death");
+      // lover chain
+      if(p.lover!==null){
+        const lov = byId(p.lover);
+        if(lov && lov.alive){
+          applyDeaths([lov.id], {[lov.id]:"liebe"});
+        }
+      }
+      // hunter queue
+      if(p.role==="jaeger" && !S.hunterQueue.includes(p.id)){
+        S.hunterQueue.push(p.id);
+      }
+    });
+    return newlyDead;
+  }
+
+  function checkWin(){
+    const liv = alive();
+    if(liv.length===2 && liv[0].lover===liv[1].id && liv[1].lover===liv[0].id){
+      return {type:"lovers", ids:[liv[0].id, liv[1].id]};
+    }
+    const wolves = liv.filter(p=>p.role==="werwolf").length;
+    const village = liv.length - wolves;
+    if(wolves===0) return {type:"village"};
+    if(wolves>=village) return {type:"wolves"};
+    return null;
+  }
+
+  function initials(name){ return name.trim().slice(0,2).toUpperCase(); }
+
+  /* ---------- render helpers ---------- */
+  const sceneEl = document.getElementById("scene");
+  const nightCounterEl = document.getElementById("nightCounter");
+
+  function setScene(html, phaseClass){
+    sceneEl.classList.remove("enter");
+    sceneEl.innerHTML = html;
+    void sceneEl.offsetWidth;
+    sceneEl.classList.add("enter");
+    document.body.classList.remove("phase-day","phase-wolves");
+    if(phaseClass) document.body.classList.add(phaseClass);
+    sfx.setAmbient(phaseClass==="phase-night" || phaseClass==="phase-wolves");
+  }
+
+  function updateNightCounter(){
+    if(S && S.screen!=="setup" && S.screen!=="end"){
+      nightCounterEl.textContent = "Nacht " + S.night;
+    } else {
+      nightCounterEl.textContent = "";
+    }
+  }
+
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+  function sleepLine(role, plural){
+    const closes = plural ? "schließen" : "schließt";
+    const sinks = plural ? "sinken" : "sinkt";
+    return pick([
+      `${role} ${closes} die Augen wieder.`,
+      `${role} ${sinks} zurück in den Schlaf.`,
+      `${role} ${closes} die Augen — die Nacht geht weiter.`
+    ]);
+  }
+  function withSleepPrefix(text){
+    if(S.sleepPrefix){ text = S.sleepPrefix + " " + text; S.sleepPrefix = null; }
+    return text;
+  }
+
+  const PHRASES = {
+    nightIntro: (n)=> pick([
+      `Schließt die Augen, Schattenmoor. Die ${n===1?"erste":"nächste"} Nacht senkt sich über das Dorf. <b>Alle schlafen</b> — bis der Erzähler euch beim Namen ruft.`,
+      `Die Dunkelheit kriecht über Schattenmoor. Schließt die Augen und schweigt, bis ihr gerufen werdet.`,
+      `Der Mond steigt über Schattenmoor. Alle schließen die Augen — die Nacht beginnt.`
+    ]),
+    cupidWake: ()=> pick([
+      `Amor, öffne die Augen. Wähle <b>zwei Herzen</b>, die diese Nacht auf ewig verbunden werden.`,
+      `Amor erwacht als Erster. Wähle zwei Seelen, deren Schicksal von nun an verknüpft ist.`
+    ]),
+    seerWake: ()=> pick([
+      `Seherin, öffne die Augen. Wessen wahre Natur willst du in dieser Nacht erblicken?`,
+      `Die Seherin erwacht aus ihrem Traum. Auf wen richtest du heute deinen Blick?`,
+      `Seherin, öffne die Augen. Ein Blick genügt, um die Wahrheit zu ahnen.`
+    ]),
+    seerVision: (name)=> pick([
+      `Im Traum zeigt sich ${name}. Merke dir gut, was du siehst.`,
+      `Ein Schleier lüftet sich — ${name} tritt in deine Vision. Präge es dir ein.`,
+      `Du siehst ${name} klar vor dir. Vergiss nicht, was du erkennst.`
+    ]),
+    wolvesWake: ()=> pick([
+      `Werwölfe, öffnet die Augen. Einigt euch leise auf <b>ein Opfer</b> aus dem Dorf.`,
+      `Der Hunger erwacht. Werwölfe, öffnet die Augen und wählt, wer diese Nacht nicht überlebt.`,
+      `Die Krallen kommen hervor. Werwölfe, seht euch an und einigt euch leise auf euer Opfer.`
+    ]),
+    witchWakeVictim: (victim)=> pick([
+      `Hexe, öffne die Augen. Die Werwölfe wählten <b>${victim}</b> als Opfer.`,
+      `Die Hexe erwacht. Ihr Kessel brodelt — <b>${victim}</b> wurde von den Werwölfen auserkoren.`,
+      `Hexe, öffne die Augen. Draußen wartet <b>${victim}</b> auf sein Schicksal.`
+    ]),
+    witchWakeCalm: ()=> pick([
+      `Hexe, öffne die Augen. In dieser Nacht floss kein Blut, das dein Heiltrank retten müsste.`,
+      `Die Hexe erwacht — doch ihr Kessel bleibt heute ruhig. Niemand braucht ihre Rettung.`
+    ]),
+    morningDeath: ()=> pick([
+      `Öffnet die Augen, Schattenmoor. Der Erzähler bringt schwere Nachricht aus der Nacht.`,
+      `Die Sonne kämpft sich über Schattenmoor. Was in der Dunkelheit geschah, kommt jetzt ans Licht.`,
+      `Öffnet die Augen. Nicht jeder von euch hat die Nacht überlebt.`
+    ]),
+    morningCalm: ()=> pick([
+      `Öffnet die Augen. Diese Nacht verging ruhig — niemand kam zu Schaden.`,
+      `Die Sonne geht auf, und Schattenmoor atmet auf: eine ruhige Nacht.`,
+      `Öffnet die Augen. Heute Morgen fehlt niemand am Tisch.`
+    ]),
+    dayBegin: ()=> pick([
+      `Das Dorf versammelt sich. Diskutiert, wer unter euch mit dem Wolf im Blut lebt.`,
+      `Die Sonne steht hoch über Schattenmoor. Redet, streitet, sucht die Wahrheit — bevor die Nacht zurückkehrt.`,
+      `Das Dorf kommt zusammen. Wer schweigt, macht sich verdächtig.`
+    ])
+  };
+
+  /* ---------- random day events ---------- */
+  const DEFAULT_DISCUSSION = 180;
+
+  const DAY_EVENTS = [
+    {
+      id: "verschlafen", title: "Tiefer Schlaf",
+      eligible: ()=> alive().length >= 4,
+      build: ()=>{
+        const p = pick(alive());
+        return { sleeperId: p.id, text: `${p.name} hat die halbe Nacht wach gelegen und verschläft nun den ganzen Morgen. <b>${p.name} darf heute weder sprechen noch abstimmen</b> — gewählt werden kann ${p.name} trotzdem.` };
+      }
+    },
+    {
+      id: "heiser", title: "Heiserkeit",
+      eligible: ()=> alive().length >= 4,
+      build: ()=>{
+        const p = pick(alive());
+        return { muteId: p.id, text: `${p.name} hat sich in der Nacht die Stimme aus der Kehle geschrien und bringt heute kein Wort heraus. <b>${p.name} darf nicht sprechen</b> — abstimmen aber schon.` };
+      }
+    },
+    {
+      id: "doppelstimme", title: "Das Wort des Ältesten",
+      eligible: ()=> alive().length >= 4,
+      build: ()=>{
+        const p = pick(alive());
+        return { doubleId: p.id, text: `Das Dorf hört heute besonders auf eine Person: <b>Die Stimme von ${p.name} zählt doppelt.</b> Zählt sie beim Abstimmen zweimal.` };
+      }
+    },
+    {
+      id: "nebel", title: "Dichter Nebel",
+      eligible: ()=> alive().length >= 5,
+      build: ()=> ({ text: `Der Nebel steht so dicht in den Gassen, dass niemand dem anderen ins Gesicht sehen kann. <b>Heute wird nicht abgestimmt</b> — niemand wird verbannt.` })
+    },
+    {
+      id: "sturm", title: "Der Sturm heult",
+      build: ()=> ({ timer: 90, text: `Ein Unwetter peitscht über Schattenmoor und treibt das Dorf zur Eile. <b>Nur halbe Redezeit</b> — dann wird entschieden.` })
+    },
+    {
+      id: "rat", title: "Große Ratsversammlung",
+      build: ()=> ({ timer: 300, text: `Der Dorfrat ruft zur langen Sitzung. <b>Heute habt ihr reichlich Zeit</b>, jeden Verdacht auszusprechen.` })
+    },
+    {
+      id: "geheime_wahl", title: "Geheime Wahl",
+      eligible: ()=> alive().length >= 4,
+      build: ()=> ({ secret: true, text: `Heute wirft jeder im Dorf seine Stimme verdeckt in den Tonkrug. <b>Die Zwischenstände bleiben verborgen</b>, bis der Krug geleert wird.` })
+    },
+    {
+      id: "losentscheid", title: "Das Los entscheidet",
+      eligible: ()=> alive().length >= 4,
+      build: ()=> ({ lot: true, text: `Der Dorfrat hat beschlossen: <b>Bei Stimmengleichheit gibt es heute keine zweite Runde</b> — dann entscheidet allein das Los.` })
+    },
+    {
+      id: "wanderer", title: "Der fremde Wanderer",
+      eligible: ()=> alive().length >= 6 && alive().some(p=>p.role==="werwolf") && alive().some(p=>p.role!=="werwolf"),
+      build: ()=>{
+        const wolf = pick(alive().filter(p=>p.role==="werwolf"));
+        const other = pick(alive().filter(p=>p.role!=="werwolf" && p.id!==wolf.id));
+        const pair = Math.random()<0.5 ? [wolf, other] : [other, wolf];
+        return { text: `Ein Wanderer rastete am Waldrand und flüstert dem Dorf beim Aufbruch zu: <b>Mindestens einer von ${pair[0].name} und ${pair[1].name} trägt den Wolf im Blut.</b>` };
+      }
+    }
+  ];
+
+  function rollDayEvent(){
+    S.dayEvent = null;
+    if(Math.random() > 0.6) return;
+    const candidates = DAY_EVENTS.filter(e=> !e.eligible || e.eligible());
+    if(!candidates.length) return;
+    const ev = pick(candidates);
+    S.dayEvent = Object.assign({ id: ev.id, title: ev.title }, ev.build());
+  }
+
+  function eventBlock(){
+    if(!S.dayEvent) return "";
+    speak(S.dayEvent.title + ". " + S.dayEvent.text);
+    return `<div class="event-card">
+      <div class="event-tag">Ereignis · ${S.dayEvent.title}</div>
+      <div class="event-text">${S.dayEvent.text}</div>
+    </div>`;
+  }
+
+  function eventRecapBlock(){
+    if(!S.dayEvent) return "";
+    return `<div class="event-card compact">
+      <div class="event-tag">Ereignis · ${S.dayEvent.title}</div>
+      <div class="event-text">${S.dayEvent.text}</div>
+    </div>`;
+  }
+
+  function expectedVotes(){
+    let n = alive().length;
+    const ev = S.dayEvent;
+    if(ev && ev.sleeperId!=null){ const p = byId(ev.sleeperId); if(p && p.alive) n -= 1; }
+    if(ev && ev.doubleId!=null){ const p = byId(ev.doubleId); if(p && p.alive) n += 1; }
+    return Math.max(0, n);
+  }
+
+  function narratorBlock(tag, html){
+    speak(html);
+    return `<div class="narrator">${NARRATOR_ICON.replace('<svg','<svg class="ico"')}<div><span class="tag">${tag}</span><div class="say">${html}</div></div></div>`;
+  }
+
+  function playerChipsHTML(players, opts){
+    opts = opts||{};
+    const selectedIds = Array.isArray(opts.selected) ? opts.selected : (opts.selected!=null ? [opts.selected] : []);
+    return `<div class="grid" data-chipgrid="${opts.action}">` + players.map(p=>{
+      const sel = selectedIds.includes(p.id) ? " selected":"";
+      const dead = !p.alive ? " dead":"";
+      const clickable = opts.disabledIds && opts.disabledIds.includes(p.id);
+      return `<button type="button" class="pchip${sel}${dead}" ${(!p.alive||clickable)?"disabled":""} data-action="${opts.action}" data-id="${p.id}">
+        <span class="avatar${!p.alive?" dead":""}">${initials(p.name)}</span>
+        <span class="pname">${p.name}</span>
+      </button>`;
+    }).join("") + `</div>`;
+  }
+
+  function updateChipSelection(action, selectedIds){
+    document.querySelectorAll(`[data-chipgrid="${action}"] [data-action="${action}"]`).forEach(el=>{
+      el.classList.toggle("selected", selectedIds.includes(Number(el.getAttribute("data-id"))));
+    });
+  }
+
+  /* ================= SCREENS ================= */
+
+  function renderSetup(){
+    if(!S) S = freshSetup();
+    const dist = DIST[S.count];
+    const chips = Object.entries(dist).map(([role,n])=>`<span class="chip"><b>${n}×</b> ${role==="dorfbewohner"?"Dorfbewohner":ROLES[role].name}</span>`).join("");
+    const inputs = S.names.map((v,i)=>`<input type="text" placeholder="Spieler ${i+1}" value="${v.replace(/"/g,'&quot;')}" data-idx="${i}" data-action="name-input" />`).join("");
+    setScene(`
+      <div class="panel">
+        <div class="eyebrow">Ein Dorf. Eine Vollmondnacht.</div>
+        <h2 class="title" style="margin-top:6px;">WERWÖLFE VON SCHATTENMOOR</h2>
+        <p class="lead">Stellt euch im Kreis auf, reicht ein Gerät herum und lasst den Erzähler durch Nacht und Tag führen. Wählt zunächst, wie viele im Dorf leben.</p>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Spieleranzahl</div>
+        <div class="stepper" style="margin-top:10px;">
+          <button class="round-btn" data-action="count-dec">−</button>
+          <div class="count">${S.count}</div>
+          <button class="round-btn" data-action="count-inc">+</button>
+        </div>
+        <div class="hint">Empfohlen: 7–8 Spieler · unterstützt 5 bis 12</div>
+        <div class="comp-preview">${chips}</div>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Namen der Dorfbewohner</div>
+        <div class="namelist">${inputs}</div>
+      </div>
+      <button class="btn" data-action="start-game">Rollen verteilen &amp; Spiel beginnen</button>
+    `);
+    updateNightCounter();
+  }
+
+  function renderReveal(){
+    const p = S.players[S.revealIndex];
+    const role = ROLES[p.role];
+    const companions = (p.role==="werwolf") ? S.wolfIds.filter(id=>id!==p.id).map(id=>byId(id).name) : null;
+    if(!S.cardFlipped){
+      setScene(`
+        <div class="panel pass-card">
+          ${ICON.narrator}
+          <div class="eyebrow">Karte ${S.revealIndex+1} / ${S.players.length}</div>
+          <div class="pass-name">${p.name}</div>
+          <p class="lead">Reiche das Gerät jetzt an ${p.name} weiter. Alle anderen schauen weg.</p>
+          <button class="btn" style="margin-top:18px;" data-action="reveal-flip">Ich bin ${p.name} — Karte aufdecken</button>
+        </div>
+      `, "phase-night");
+    } else {
+      setScene(`
+        <div class="card-stage">
+          <div class="card flipped" data-action="noop">
+            <div class="face front">
+              <div class="icon-wrap role-${p.role}" style="color:${role.team==='wolf'?'var(--blood-bright)':'var(--moss)'}">${role.icon}</div>
+              <div class="role-name">${role.name}</div>
+              <div class="role-team ${role.team}">${role.team==='wolf'?'Werwölfe':'Dorf'}</div>
+              <div class="role-flavor">„${role.flavor}“</div>
+              <div class="role-mechanic">${role.mechanic}</div>
+              ${companions && companions.length ? `<div class="role-companions">Deine Mitwölfe: ${companions.join(", ")}</div>` : ""}
+              ${companions && companions.length===0 ? `<div class="role-companions">Du bist der einzige Werwolf.</div>` : ""}
+            </div>
+          </div>
+        </div>
+        <button class="btn" data-action="reveal-next">Rolle gemerkt — weiterreichen</button>
+      `, "phase-night");
+    }
+    updateNightCounter();
+  }
+
+  function renderNightIntro(){
+    const isFirst = S.night===1;
+    setScene(`
+      <div class="panel">
+        ${narratorBlock("Der Erzähler spricht", PHRASES.nightIntro(S.night))}
+      </div>
+      <button class="btn" data-action="night-continue">Weiter</button>
+    `, "phase-night");
+    updateNightCounter();
+  }
+
+  function renderCupid(){
+    const options = alive();
+    const picked = S.cupidPick;
+    setScene(`
+      <div class="panel">
+        ${narratorBlock("Amor erwacht", PHRASES.cupidWake())}
+      </div>
+      <div class="panel">
+        ${playerChipsHTML(options, {action:"cupid-pick", selected: picked})}
+        <p class="hint" id="cupidHint" style="margin-top:10px;">Ausgewählt: ${picked.map(id=>byId(id).name).join(", ")||"—"}</p>
+      </div>
+      <button class="btn" id="cupidConfirmBtn" data-action="cupid-confirm" ${picked.length===2?"":"disabled"}>Verliebte bestätigen</button>
+    `, "phase-night");
+  }
+
+  function renderWolves(){
+    const targets = alive();
+    sfx.howl();
+    setScene(`
+      <div class="panel">
+        ${narratorBlock("Die Werwölfe erwachen", withSleepPrefix(PHRASES.wolvesWake()))}
+      </div>
+      <div class="panel">
+        ${playerChipsHTML(targets, {action:"wolf-pick", selected: S.night_wolfTarget})}
+        <p class="hint" style="margin-top:10px;">Ihr dürft jeden wählen — auch euch selbst oder einen Mitwolf.</p>
+      </div>
+      <button class="btn danger" id="wolfConfirmBtn" data-action="wolf-confirm" ${S.night_wolfTarget!==null?"":"disabled"}>Opfer bestätigen — Augen schließen</button>
+    `, "phase-wolves");
+  }
+
+  function renderSeer(){
+    const seer = alive().find(p=>p.role==="seherin");
+    const targets = alive().filter(p=>p.id!==seer.id);
+    if(S.night_seerResult==null){
+      setScene(`
+        <div class="panel">
+          ${narratorBlock("Die Seherin erwacht", withSleepPrefix(PHRASES.seerWake()))}
+        </div>
+        <div class="panel">
+          ${playerChipsHTML(targets, {action:"seer-pick"})}
+        </div>
+      `, "phase-night");
+    } else {
+      const target = byId(S.night_seerResult);
+      const role = ROLES[target.role];
+      sfx.reveal();
+      setScene(`
+        <div class="panel">
+          ${narratorBlock("Die Vision", PHRASES.seerVision(target.name))}
+        </div>
+        <div class="panel" style="text-align:center;">
+          <div class="icon-wrap" style="width:72px;height:72px;margin:0 auto 8px;color:${role.team==='wolf'?'var(--blood-bright)':'var(--moss)'}">${role.icon}</div>
+          <div class="role-name" style="font-size:1.2rem;">${target.name} ist: ${role.name}</div>
+        </div>
+        <button class="btn" data-action="seer-close">Augen wieder schließen</button>
+      `, "phase-night");
+    }
+  }
+
+  function renderWitch(){
+    const wolfVictim = S.night_wolfTarget!==null ? byId(S.night_wolfTarget) : null;
+    if(S.night_witchStep==="ask-heal"){
+      setScene(`
+        <div class="panel">
+          ${narratorBlock("Die Hexe erwacht", withSleepPrefix(
+            (wolfVictim
+              ? PHRASES.witchWakeVictim(wolfVictim.name) + (S.witchHealUsed ? " Dein Heiltrank ist bereits verbraucht." : " Willst du diese Person mit deinem letzten Heiltrank retten?")
+              : PHRASES.witchWakeCalm())
+          ))}
+        </div>
+        <div class="row">
+          <button class="btn secondary" data-action="witch-heal-no">Nicht heilen</button>
+          <button class="btn" data-action="witch-heal-yes" ${(!wolfVictim||S.witchHealUsed)?"disabled":""}>Retten</button>
+        </div>
+      `, "phase-night");
+    } else {
+      const poisonTargets = alive().filter(p=> !(S.night_witchHeal && p.id===S.night_wolfTarget));
+      setScene(`
+        <div class="panel">
+          ${narratorBlock("Der zweite Trank", S.witchPoisonUsed
+            ? `Dein Gifttrank ist bereits verbraucht. Schließe die Augen wieder.`
+            : `Möchtest du in dieser Nacht jemanden mit deinem letzten Gift vergiften — oder ihn im Kessel lassen?`)}
+        </div>
+        ${!S.witchPoisonUsed ? `<div class="panel">${playerChipsHTML(poisonTargets, {action:"witch-poison-pick", selected:S.night_witchPoisonTarget})}</div>` : ""}
+        <div class="row">
+          <button class="btn secondary" data-action="witch-poison-no">Kein Gift heute</button>
+          <button class="btn danger" id="witchPoisonBtn" data-action="witch-poison-yes" ${(S.witchPoisonUsed||S.night_witchPoisonTarget===null)?"disabled":""}>Vergiften</button>
+        </div>
+      `, "phase-night");
+    }
+  }
+
+  function renderMorning(){
+    const nightLines = S.log.slice(S.logMarkStart||0);
+    const anyDeath = nightLines.some(l=>l.cls==="death");
+    if(anyDeath) sfx.bell(); else sfx.chime();
+    setScene(`
+      <div class="panel">
+        ${narratorBlock("Der Morgen graut", withSleepPrefix(anyDeath ? PHRASES.morningDeath() : PHRASES.morningCalm()))}
+      </div>
+      <div class="panel log">
+        ${nightLines.length ? nightLines.map(l=>`<div class="line ${l.cls}">${l.text}</div>`).join("") : `<div class="line calm">Kein Vorfall zu berichten.</div>`}
+      </div>
+      <button class="btn" data-action="morning-continue">Weiter</button>
+    `, "phase-day");
+  }
+
+  function renderHunterShot(){
+    const hunter = byId(S.hunterQueue[0]);
+    const targets = S.players.filter(p=>p.alive && p.id!==hunter.id);
+    setScene(`
+      <div class="panel">
+        ${narratorBlock("Der letzte Schuss", `${hunter.name}, dein Ende naht — doch dein Finger liegt noch am Abzug. Wähle, wen du mit dir nimmst.`)}
+      </div>
+      <div class="panel">
+        ${playerChipsHTML(targets, {action:"hunter-pick", selected:S.hunterTarget})}
+      </div>
+      <button class="btn danger" data-action="hunter-confirm" ${S.hunterTarget!=null?"":"disabled"}>Abdrücken</button>
+    `, "phase-day");
+  }
+
+  function renderDayDiscuss(){
+    const t = S.timerSeconds;
+    const total = S.timerTotal;
+    const pct = Math.max(0, t/total);
+    const circumference = 2*Math.PI*78;
+    const offset = circumference * (1-pct);
+    const mm = String(Math.floor(t/60)).padStart(2,"0");
+    const ss = String(t%60).padStart(2,"0");
+    const low = t<=30;
+    sfx.gather();
+    setScene(`
+      <div class="panel">
+        ${narratorBlock("Der Tag beginnt", PHRASES.dayBegin())}
+      </div>
+      ${eventBlock()}
+      <div class="panel timer-wrap">
+        <svg class="ring" viewBox="0 0 180 180">
+          <circle class="bg" cx="90" cy="90" r="78"/>
+          <circle class="fg" cx="90" cy="90" r="78" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" transform="rotate(-90 90 90)" style="stroke:${low?'var(--blood-bright)':'var(--candle)'}"/>
+          <text class="ring-label" x="90" y="97">${mm}:${ss}</text>
+        </svg>
+        <div class="timer-controls">
+          <button class="round-btn" data-action="timer-adjust" data-delta="-30">-30s</button>
+          <button class="round-btn" data-action="timer-toggle">${S.timerRunning?"⏸":"▶"}</button>
+          <button class="round-btn" data-action="timer-adjust" data-delta="30">+30s</button>
+        </div>
+      </div>
+      ${S.dayEvent && S.dayEvent.id==="nebel"
+        ? `<button class="btn" data-action="skip-vote">Tag beenden — niemand wird verbannt</button>`
+        : `<button class="btn" data-action="to-vote">Zur Abstimmung</button>`}
+    `, "phase-day");
+  }
+
+  function voteHidden(){ return !!(S.dayEvent && S.dayEvent.secret); }
+
+  function renderDayVote(){
+    const pool = S.voteRestrict ? S.voteRestrict.map(byId) : alive();
+    const totalVotes = Object.values(S.voteTally).reduce((a,b)=>a+b,0);
+    const hidden = voteHidden();
+    const sleeperId = S.dayEvent && S.dayEvent.sleeperId;
+    setScene(`
+      <div class="panel">
+        ${narratorBlock("Die Abstimmung", S.voteRestrict ? `Stimmengleichheit! Das Dorf stimmt erneut ab — nur unter den Verdächtigen.` : `Jeder Stimme zählt. Tippt für jede abgegebene Stimme auf die verdächtige Person.`)}
+      </div>
+      ${eventRecapBlock()}
+      <div class="panel">
+        ${pool.map(p=>`
+          <div class="vrow" data-vrow="${p.id}">
+            <span class="avatar">${initials(p.name)}</span>
+            <span class="pname">${p.name}</span>
+            ${p.id===sleeperId ? `<span class="sleep-badge">schläft</span>` : ""}
+            <button class="vbtn" data-action="vote-dec" data-id="${p.id}">−</button>
+            <span class="vcount">${hidden ? "•" : (S.voteTally[p.id]||0)}</span>
+            <button class="vbtn" data-action="vote-inc" data-id="${p.id}">+</button>
+          </div>
+        `).join("")}
+        <p class="hint" id="voteHint">Stimmen abgegeben: ${totalVotes} / ${expectedVotes()}</p>
+      </div>
+      <div class="row">
+        <button class="btn secondary" data-action="vote-reset">Zurücksetzen</button>
+        <button class="btn danger" id="voteResolveBtn" data-action="vote-resolve" ${totalVotes>0?"":"disabled"}>Verbannen</button>
+      </div>
+    `, "phase-day");
+  }
+
+  function updateVoteDom(){
+    if(!S || S.screen!=="day-vote") return;
+    const hidden = voteHidden();
+    document.querySelectorAll("[data-vrow]").forEach(row=>{
+      const id = Number(row.getAttribute("data-vrow"));
+      const cnt = row.querySelector(".vcount");
+      if(cnt) cnt.textContent = hidden ? "•" : (S.voteTally[id]||0);
+    });
+    const total = Object.values(S.voteTally).reduce((a,b)=>a+b,0);
+    const hint = document.getElementById("voteHint");
+    if(hint) hint.textContent = `Stimmen abgegeben: ${total} / ${expectedVotes()}`;
+    const resolveBtn = document.getElementById("voteResolveBtn");
+    if(resolveBtn) resolveBtn.disabled = total<=0;
+  }
+
+  function renderNoLynch(){
+    sfx.chime();
+    setScene(`
+      <div class="panel">
+        ${narratorBlock("Kein Urteil", `Der Nebel verschluckt jeden Verdacht. Das Dorf geht auseinander, ohne jemanden zu verbannen — und die Nacht wartet schon.`)}
+      </div>
+      <div class="panel log">
+        ${S.log.slice(-2).map(l=>`<div class="line ${l.cls}">${l.text}</div>`).join("")}
+      </div>
+      <button class="btn" data-action="no-lynch-continue">Weiter in die Nacht</button>
+    `, "phase-day");
+  }
+
+  function renderElimination(){
+    const p = S.lastEliminated;
+    const role = ROLES[p.role];
+    sfx.bell();
+    setScene(`
+      <div class="card-stage">
+        <div class="card flipped">
+          <div class="face front">
+            <div class="icon-wrap" style="color:${role.team==='wolf'?'var(--blood-bright)':'var(--moss)'}">${role.icon}</div>
+            <div class="role-name">${p.name}</div>
+            <div class="role-team ${role.team}">war ${role.name}</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel log">
+        ${S.log.slice(-3).map(l=>`<div class="line ${l.cls}">${l.text}</div>`).join("")}
+      </div>
+      <button class="btn" data-action="elimination-continue">Weiter</button>
+    `, "phase-day");
+  }
+
+  function renderEnd(){
+    const w = S.winner;
+    const cls = w.type;
+    let title, sub;
+    if(cls==="village"){ title="Das Dorf hat gesiegt"; sub="Alle Werwölfe wurden enttarnt. Schattenmoor kann wieder ruhig schlafen."; }
+    else if(cls==="wolves"){ title="Die Werwölfe haben gewonnen"; sub="Der Wald hat das Dorf verschlungen. Niemand wird die Sonne wieder ruhig begrüßen."; }
+    else { title="Die Liebenden triumphieren"; sub= byId(w.ids[0]).name + " und " + byId(w.ids[1]).name + " überstehen die Nacht gemeinsam — komme, was wolle."; }
+    let particles = "";
+    for(let i=0;i<18;i++){
+      const left = Math.random()*100;
+      const delay = Math.random()*2;
+      const size = 4+Math.random()*4;
+      const color = cls==="wolves" ? "var(--blood-bright)" : cls==="lovers" ? "var(--violet)" : "var(--moss)";
+      particles += `<span class="particle" style="left:${left}%; top:-10px; width:${size}px; height:${size}px; background:${color}; animation-delay:${delay}s; animation-duration:${3+Math.random()*2}s;"></span>`;
+    }
+    if(cls==="village") sfx.village(); else if(cls==="wolves") sfx.wolves(); else sfx.lovers();
+    setScene(`
+      <div class="end-banner ${cls}">
+        ${particles}
+        <h2>${title}</h2>
+        <p>${sub}</p>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Chronik der Nacht</div>
+        <div class="roster-recap">
+          ${S.players.map(p=>`<div class="rr ${!p.alive?"dead-r":""}"><span class="rn">${p.name}${!p.alive?" ✝":""}</span><span class="rr-role">${ROLES[p.role].name}</span></div>`).join("")}
+        </div>
+      </div>
+      <button class="btn" data-action="restart">Neues Spiel</button>
+    `, cls==="wolves"?"phase-wolves":"phase-day");
+    updateNightCounter();
+  }
+
+  /* ---------- master render ---------- */
+  function render(){
+    stopTimer();
+    if(!S || S.screen==="setup") return renderSetup();
+    updateNightCounter();
+    switch(S.screen){
+      case "reveal": return renderReveal();
+      case "night-intro": return renderNightIntro();
+      case "cupid": return renderCupid();
+      case "wolves": return renderWolves();
+      case "seer": return renderSeer();
+      case "witch": return renderWitch();
+      case "morning": return renderMorning();
+      case "hunter-shot": return renderHunterShot();
+      case "day-discuss": return renderDayDiscuss();
+      case "day-vote": return renderDayVote();
+      case "elimination": return renderElimination();
+      case "no-lynch": return renderNoLynch();
+      case "end": return renderEnd();
+      default: return renderSetup();
+    }
+  }
+
+  function startTimer(){
+    if(S.timerHandle) return;
+    S.timerRunning = true;
+    S.timerHandle = setInterval(()=>{
+      if(S.timerSeconds>0){ S.timerSeconds--; updateTimerDom(); }
+      else { stopTimer(); }
+    },1000);
+  }
+  function stopTimer(){
+    if(S && S.timerHandle){ clearInterval(S.timerHandle); S.timerHandle=null; S.timerRunning=false; }
+  }
+  function updateTimerDom(){
+    if(!S || S.screen!=="day-discuss") return;
+    const t = S.timerSeconds, total=S.timerTotal;
+    const circumference = 2*Math.PI*78;
+    const offset = circumference * (1-Math.max(0,t/total));
+    const mm = String(Math.floor(t/60)).padStart(2,"0");
+    const ss = String(t%60).padStart(2,"0");
+    const fg = document.querySelector(".ring .fg");
+    const label = document.querySelector(".ring-label");
+    if(fg){ fg.setAttribute("stroke-dashoffset", offset); fg.style.stroke = t<=30 ? "var(--blood-bright)" : "var(--candle)"; }
+    if(label) label.textContent = mm+":"+ss;
+  }
+
+  /* ---------- night sequencing ---------- */
+  function startNight(){
+    S.logMarkStart = S.log.length;
+    S.night_wolfTarget = null;
+    S.night_seerResult = null;
+    S.night_witchHeal = null;
+    S.night_witchPoisonTarget = null;
+    S.night_witchStep = "ask-heal";
+    S.hunterTarget = null;
+    S.sleepPrefix = null;
+    S.dayEvent = null;
+    const hasCupid = S.night===1 && alive().some(p=>p.role==="amor");
+    S.screen = hasCupid ? "cupid" : nextAfterCupid();
+    S.cupidPick = [];
+  }
+
+  function nextAfterCupid(){
+    return alive().some(p=>p.role==="seherin") ? "seer" : "wolves";
+  }
+
+  function afterCupid(){ S.sleepPrefix = sleepLine("Amor"); S.screen = nextAfterCupid(); render(); }
+
+  function afterSeer(){ S.sleepPrefix = sleepLine("Die Seherin"); S.screen = "wolves"; render(); }
+
+  function afterWolves(){
+    S.sleepPrefix = sleepLine("Die Werwölfe", true);
+    const hasWitch = alive().some(p=>p.role==="hexe");
+    S.screen = hasWitch ? "witch" : "resolve-night";
+    if(S.screen==="resolve-night"){ resolveNight(); return; }
+    render();
+  }
+
+  function resolveNight(){
+    const deaths = [];
+    const causeMap = {};
+    if(S.night_wolfTarget!==null && S.night_wolfTarget!==S.night_witchHeal){
+      deaths.push(S.night_wolfTarget); causeMap[S.night_wolfTarget]="wolf";
+    }
+    if(S.night_witchPoisonTarget!==null){
+      deaths.push(S.night_witchPoisonTarget); causeMap[S.night_witchPoisonTarget]="gift";
+    }
+    applyDeaths(deaths, causeMap);
+    S.screen = "morning";
+    render();
+  }
+
+  function afterDeathsThen(nextFn){
+    if(S.hunterQueue.length>0){
+      S.screen = "hunter-shot";
+      S.afterAllResolved = nextFn;
+      render();
+    } else {
+      nextFn();
+    }
+  }
+
+  function proceedFromMorning(){
+    afterDeathsThen(()=>{
+      const w = checkWin();
+      if(w){ S.winner=w; S.screen="end"; render(); return; }
+      S.screen = "day-discuss";
+      rollDayEvent();
+      S.timerTotal = (S.dayEvent && S.dayEvent.timer) || DEFAULT_DISCUSSION;
+      S.timerSeconds = S.timerTotal;
+      render();
+    });
+  }
+
+  function proceedWithoutLynch(){
+    const w = checkWin();
+    if(w){ S.winner=w; S.screen="end"; render(); return; }
+    S.night++;
+    startNight();
+    render();
+  }
+
+  function proceedFromElimination(){
+    afterDeathsThen(()=>{
+      const w = checkWin();
+      if(w){ S.winner=w; S.screen="end"; render(); return; }
+      S.night++;
+      startNight();
+      render();
+    });
+  }
+
+  /* ---------- event delegation ---------- */
+  document.getElementById("app").addEventListener("click", function(e){
+    const btn = e.target.closest("[data-action]");
+    if(!btn) return;
+    const action = btn.getAttribute("data-action");
+
+    if(action==="noop") return;
+
+    if(action==="sound-toggle"){ setSoundEnabled(!soundEnabled); return; }
+
+    sfx.tap();
+
+    if(action==="count-inc"){ S.count = Math.min(12, S.count+1); syncNames(); render(); return; }
+    if(action==="count-dec"){ S.count = Math.max(5, S.count-1); syncNames(); render(); return; }
+    if(action==="start-game"){ initGame(S.count, S.names); render(); return; }
+
+    if(action==="reveal-flip"){ S.cardFlipped=true; sfx.flip(); render(); return; }
+    if(action==="reveal-next"){
+      S.cardFlipped=false;
+      if(S.revealIndex < S.players.length-1){ S.revealIndex++; render(); }
+      else { S.screen="night-intro"; render(); }
+      return;
+    }
+
+    if(action==="night-continue"){ startNight(); render(); return; }
+
+    if(action==="cupid-pick"){
+      const id = Number(btn.getAttribute("data-id"));
+      const idx = S.cupidPick.indexOf(id);
+      if(idx>-1) S.cupidPick.splice(idx,1);
+      else if(S.cupidPick.length<2) S.cupidPick.push(id);
+      updateChipSelection("cupid-pick", S.cupidPick);
+      const hint = document.getElementById("cupidHint");
+      if(hint) hint.textContent = "Ausgewählt: " + (S.cupidPick.map(x=>byId(x).name).join(", ")||"—");
+      const confirmBtn = document.getElementById("cupidConfirmBtn");
+      if(confirmBtn) confirmBtn.disabled = S.cupidPick.length!==2;
+      return;
+    }
+    if(action==="cupid-confirm"){
+      const [a,b] = S.cupidPick;
+      byId(a).lover=b; byId(b).lover=a;
+      pushLog(`Amor verbindet ${byId(a).name} und ${byId(b).name} für immer.`, "");
+      afterCupid(); return;
+    }
+
+    if(action==="wolf-pick"){
+      S.night_wolfTarget = Number(btn.getAttribute("data-id"));
+      updateChipSelection("wolf-pick", [S.night_wolfTarget]);
+      const confirmBtn = document.getElementById("wolfConfirmBtn");
+      if(confirmBtn) confirmBtn.disabled = false;
+      return;
+    }
+    if(action==="wolf-confirm"){ afterWolves(); return; }
+
+    if(action==="seer-pick"){ S.night_seerResult = Number(btn.getAttribute("data-id")); render(); return; }
+    if(action==="seer-close"){ afterSeer(); return; }
+
+    if(action==="witch-heal-yes"){ S.night_witchHeal = S.night_wolfTarget; S.witchHealUsed=true; S.night_witchStep="ask-poison"; render(); return; }
+    if(action==="witch-heal-no"){ S.night_witchStep="ask-poison"; render(); return; }
+    if(action==="witch-poison-pick"){
+      S.night_witchPoisonTarget = Number(btn.getAttribute("data-id"));
+      updateChipSelection("witch-poison-pick", [S.night_witchPoisonTarget]);
+      const poisonBtn = document.getElementById("witchPoisonBtn");
+      if(poisonBtn) poisonBtn.disabled = false;
+      return;
+    }
+    if(action==="witch-poison-yes"){ S.witchPoisonUsed=true; S.sleepPrefix=sleepLine("Die Hexe"); resolveNight(); return; }
+    if(action==="witch-poison-no"){ S.night_witchPoisonTarget=null; S.sleepPrefix=sleepLine("Die Hexe"); resolveNight(); return; }
+
+    if(action==="morning-continue"){ proceedFromMorning(); return; }
+
+    if(action==="hunter-pick"){ S.hunterTarget = Number(btn.getAttribute("data-id")); render(); return; }
+    if(action==="hunter-confirm"){
+      const hunterId = S.hunterQueue.shift();
+      applyDeaths([S.hunterTarget], {[S.hunterTarget]:"jaeger"});
+      S.hunterTarget = null;
+      if(S.hunterQueue.length>0){ render(); return; }
+      const cb = S.afterAllResolved; S.afterAllResolved=null;
+      if(cb) cb();
+      return;
+    }
+
+    if(action==="timer-toggle"){ if(S.timerRunning){ stopTimer(); } else { startTimer(); } document.querySelector('[data-action="timer-toggle"]').textContent = S.timerRunning?"⏸":"▶"; return; }
+    if(action==="timer-adjust"){ const d=Number(btn.getAttribute("data-delta")); S.timerSeconds=Math.max(0,S.timerSeconds+d); S.timerTotal=Math.max(S.timerTotal, S.timerSeconds); updateTimerDom(); return; }
+    if(action==="to-vote"){ stopTimer(); S.screen="day-vote"; S.voteTally={}; S.voteRestrict=null; render(); return; }
+
+    if(action==="vote-inc"){ const id=Number(btn.getAttribute("data-id")); S.voteTally[id]=(S.voteTally[id]||0)+1; updateVoteDom(); return; }
+    if(action==="vote-dec"){ const id=Number(btn.getAttribute("data-id")); S.voteTally[id]=Math.max(0,(S.voteTally[id]||0)-1); updateVoteDom(); return; }
+    if(action==="vote-reset"){ S.voteTally={}; updateVoteDom(); return; }
+    if(action==="vote-resolve"){
+      const entries = Object.entries(S.voteTally).filter(([,v])=>v>0).map(([k,v])=>[Number(k),v]);
+      if(!entries.length) return;
+      const max = Math.max(...entries.map(([,v])=>v));
+      const top = entries.filter(([,v])=>v===max).map(([k])=>k);
+      let chosen;
+      if(top.length>1){
+        if(S.dayEvent && S.dayEvent.lot){
+          chosen = pick(top);
+          pushLog(`Das Los entscheidet zwischen ${top.map(id=>byId(id).name).join(" und ")} — und fällt auf ${byId(chosen).name}.`, "");
+        } else {
+          S.voteRestrict = top; S.voteTally={};
+          render(); return;
+        }
+      } else {
+        chosen = top[0];
+      }
+      applyDeaths([chosen], {[chosen]:"vote"});
+      S.lastEliminated = byId(chosen);
+      S.screen = "elimination";
+      render();
+      return;
+    }
+    if(action==="skip-vote"){
+      stopTimer();
+      pushLog(`Der Nebel über Schattenmoor war zu dicht — heute wurde niemand verbannt.`, "calm");
+      S.screen = "no-lynch";
+      render();
+      return;
+    }
+    if(action==="no-lynch-continue"){ proceedWithoutLynch(); return; }
+    if(action==="elimination-continue"){ proceedFromElimination(); return; }
+
+    if(action==="restart"){ S=freshSetup(); render(); return; }
+  });
+
+  document.getElementById("app").addEventListener("input", function(e){
+    const t = e.target;
+    if(t.matches('[data-action="name-input"]')){
+      const idx = Number(t.getAttribute("data-idx"));
+      S.names[idx] = t.value;
+    }
+  });
+
+  function syncNames(){
+    while(S.names.length < S.count) S.names.push("");
+    S.names.length = S.count;
+  }
+
+  /* ---------- ambient stars ---------- */
+  (function seedStars(){
+    const el = document.getElementById("stars");
+    let html = "";
+    for(let i=0;i<60;i++){
+      const top = Math.random()*70;
+      const left = Math.random()*100;
+      const delay = (Math.random()*3).toFixed(2);
+      html += `<span class="star" style="top:${top}%; left:${left}%; animation-delay:${delay}s;"></span>`;
+    }
+    el.innerHTML = html;
+  })();
+
+  S = freshSetup();
+  render();
+})();
+</script>
 </body>
 </html>

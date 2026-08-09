@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: werwolf-schattenmoor
+    runtime: node
+    plan: free
+    rootDir: werwolf-multiplayer
+    buildCommand: npm install
+    startCommand: node server/server.js

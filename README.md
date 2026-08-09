@@ -1,175 +1,93 @@
-# 🐺 Werwölfe von Düsterwald
+# 🐺 Werwölfe von Schattenmoor
 
-Ein Spielleiter-Werkzeug für Werwolf-Runden — **im Browser, ohne Anmeldung, ohne Server**.
-Ein Handy reicht für die ganze Gruppe.
+Werwolf-Partyspiel im Browser — **ohne Anmeldung, ohne Installation**.
+In zwei Ausführungen: ein Gerät zum Herumreichen, oder jeder an seinem eigenen Handy.
 
-**▶ [Hier spielen](https://lionboomer.github.io/werwolf/)**
-
----
-
-## Was es macht
-
-Werwolf braucht sonst einen Spielleiter, der Rollen mischt, die Nachtreihenfolge im Kopf
-hat und aufpasst, dass die Hexe ihren Trank nur einmal benutzt. Das übernimmt diese Seite.
-
-- **Rollen automatisch verteilen** — ausbalanciert nach Spielerzahl (4 bis 30)
-- **Verdeckte Rollenvergabe** — das Gerät wandert reihum, jeder sieht nur sich selbst
-- **Nachtphase führt sich selbst** — richtige Reihenfolge, richtige Auswahl, keine Regelfehler
-- **Zufallsereignisse** — Vollmond, Nebel, Erntedankfest und sieben weitere
-- **Erzähler mit Stimme** — spricht die Ansagen auf Deutsch vor
-- **Chronik** — was in welcher Nacht geschah, zum Nachlesen am Ende
-
-Es wird **nichts gespeichert und nichts gesendet**. Nur die Namensliste bleibt lokal im
-Browser, damit die nächste Runde schneller startet.
+**▶ [Direkt spielen (Ein-Gerät)](https://lionboomer.github.io/werwolf/)**
+· 📄 [Regelzettel zum Ausdrucken](regelzettel.pdf)
 
 ---
 
-## Rollen
+## Zwei Varianten
 
-| | Rolle | Team | Fähigkeit |
-|---|---|---|---|
-| 🐺 | **Werwolf** | Wölfe | Reißt jede Nacht gemeinsam mit dem Rudel ein Opfer |
-| 🧑‍🌾 | **Dorfbewohner** | Dorf | Keine Fähigkeit — nur Stimme und Verstand |
-| 🔮 | **Seherin** | Dorf | Erfährt jede Nacht die Rolle einer Person |
-| 🧪 | **Hexe** | Dorf | Ein Heiltrank, ein Gifttrank — je einmal im Spiel |
-| 🏹 | **Jäger** | Dorf | Stirbt er, reißt sein letzter Schuss jemanden mit |
-| 🛡️ | **Beschützer** | Dorf | Schützt nachts eine Person, nie zweimal dieselbe hintereinander |
-| 💘 | **Amor** | Dorf | Verkuppelt in Nacht 1 zwei Menschen auf Leben und Tod |
-| 🃏 | **Dorfnarr** | allein | Gewinnt sofort, wenn das Dorf ihn lyncht |
+| | Ein-Gerät | Multiplayer |
+|---|---|---|
+| **Ordner** | `index.html` (Wurzel) | `multiplayer/` |
+| **Zustand** | ✅ fertig, gespielt und getestet | ⚙️ läuft, einzelne Rollen fehlen noch |
+| **Wie** | Ein Handy geht im Kreis herum, die App ist der Erzähler | Node.js/WebSocket-Server, Lobby-Code, eigener Erzähler-Bildschirm |
+| **Braucht** | nichts — eine einzige HTML-Datei | Node 18+, oder kostenloses Hosting per `render.yaml` |
 
-### Balance
-
-Die Verteilung folgt der Faustregel **ein Wolf auf vier Spieler**, Sonderrollen kommen
-gestaffelt dazu, damit kleine Runden nicht von Fähigkeiten erschlagen werden.
-
-| Spieler | Wölfe | Anteil | Sonderrollen ab |
-|---|---|---|---|
-| 4–5 | 1 | 20–25 % | Seherin |
-| 6 | 2 | 33 % | + Hexe |
-| 7–8 | 2 | 25–29 % | + Jäger |
-| 9 | 2 | 22 % | + Beschützer |
-| 10–11 | 2 | 18–20 % | + Amor |
-| 12–15 | 3 | 20–25 % | + Dorfnarr (optional) |
-| 16+ | 4–5 | ~20 % | |
-
-Ab 8 Spielern ist immer mindestens ein einfacher Dorfbewohner dabei — sonst wird das Spiel
-zum Fähigkeiten-Wettrennen. Die Regel wird von `pruefeBalance()` für jede Spielerzahl
-zwischen 4 und 30 geprüft.
+Die Ein-Gerät-Fassung ist **eine einzige Datei ohne Abhängigkeiten**. Herunterladen und
+doppelklicken genügt — sie funktioniert auch offline und auf einem USB-Stick.
 
 ---
 
-## Zufallsereignisse
+## Regeln
 
-Schaltbar. Ab der zweiten Nacht zieht das Spiel jede Phase ein Ereignis — meistens
-passiert nichts Besonderes, manchmal wird es interessant.
+**Nachtreihenfolge:** Amor (nur Nacht 1) → Seherin → Werwölfe → Hexe.
+Nach jeder Rolle sagt der Erzähler ausdrücklich, dass sie wieder einschläft, bevor die
+nächste geweckt wird — so verrät die Pause niemanden.
 
-| Ereignis | Wirkung |
-|---|---|
-| **Ein langer Schlaf** | Eine Person verschläft den Tag und darf nicht mitreden — wählen schon |
-| **Vollmond** | Das Rudel reißt in dieser Nacht **zwei** Opfer |
-| **Dichter Nebel** | Die Seherin sieht nichts |
-| **Sturmnacht** | Die Abstimmung läuft geheim |
-| **Erntedankfest** | Heute wird niemand hingerichtet |
-| **Die Krähen** | Eine Person startet mit einer Stimme gegen sich |
-| **Der Rat des Ältesten** | Eine Person hat eine doppelte Stimme |
-| **Ein Wanderer** | Verrät, wie viele Werwölfe noch leben |
-| **Ruhige Nacht / gewöhnlicher Tag** | Nichts passiert (am häufigsten) |
+### Rollenverteilung
 
----
+| Spieler | 🐺 Wölfe | 🔮 Seherin | 🧪 Hexe | 🏹 Jäger | 💘 Amor | 🧑‍🌾 Dorf |
+|---|---|---|---|---|---|---|
+| 5 | 1 | 1 | – | – | – | 3 |
+| 6 | 1 | 1 | – | – | – | 4 |
+| 7 | 2 | 1 | 1 | – | – | 3 |
+| 8 | 2 | 1 | 1 | 1 | – | 3 |
+| 9 | 2 | 1 | 1 | 1 | 1 | 3 |
+| 10 | 3 | 1 | 1 | 1 | 1 | 3 |
+| 11 | 3 | 1 | 1 | 1 | 1 | 4 |
+| 12 | 3 | 1 | 1 | 1 | 1 | 5 |
 
-## Ablauf einer Runde
+> **Balance-Entscheid:** Bei 6 Spielern standen vorher Seherin *und* Hexe gegen einen
+> einzigen Wolf — erdrückend. Jetzt gibt es dort nur **eine** Sonderrolle, dafür einen
+> Dorfbewohner mehr. Die Hexe kommt ab 7 Spielern dazu.
 
-1. **Namen eintragen**, Einstellungen wählen, Spiel starten
-2. **Rollenvergabe** — Gerät wandert reihum, jeder tippt „Rolle ansehen", merkt sie sich, gibt weiter
-3. **Nacht** — der Erzähler ruft die Rollen der Reihe nach auf, der Spielleiter tippt die Aktionen
-4. **Tag** — Tote werden verkündet, ein Ereignis kann eintreten, das Dorf diskutiert
-5. **Abstimmung** — jede lebende Person wählt, das Spiel zählt aus
-6. Zurück zu 3, bis eine Seite gewinnt
+**Hausregel Wolfs-Selbstwahl:** Die Werwölfe dürfen **jeden Lebenden** reißen, auch einen
+Mitwolf oder sich selbst — mit eigener Erzähler-Meldung („Das Rudel hat sich selbst
+zerfleischt"). Reißt sich der letzte Wolf selbst, gewinnt das Dorf.
 
-**Siegbedingungen:** Das Dorf gewinnt, wenn der letzte Wolf tot ist. Die Wölfe gewinnen,
-sobald sie mindestens so viele sind wie alle anderen zusammen. Der Dorfnarr gewinnt allein,
-wenn er gelyncht wird. Ein Liebespaar über die Fronten hinweg gewinnt zu zweit, wenn nur
-noch die beiden übrig sind.
+**Siegbedingungen:** Dorf, wenn alle Wölfe tot sind · Werwölfe, sobald sie an Zahl
+ebenbürtig oder überlegen sind · Liebespaar, wenn nur noch die zwei Verliebten übrig
+sind — unabhängig vom Team.
 
 ---
 
-## Selbst betreiben
+## Erzähler und Zufallsereignisse
 
-Es ist eine statische Seite — drei Dateien, keine Abhängigkeiten, kein Bauschritt.
+Jede Erzähler-Zeile wird per **Web Speech API** auf Deutsch vorgelesen (`de-DE`, tiefere
+Tonlage). Mehrere Textblöcke auf einem Bildschirm werden zu **einer** Äußerung
+zusammengefasst — sonst schneidet die nächste die vorige ab.
+
+Dazu **Zufallsereignisse am Tag**, damit keine Runde wie die vorige läuft.
+
+Fehlt die Sprachausgabe im Browser (Firefox je nach System), läuft alles andere weiter.
+
+---
+
+## Multiplayer betreiben
 
 ```bash
-git clone https://github.com/lionboomer/werwolf.git
-cd werwolf
-python3 -m http.server 8000     # oder irgendein Webserver
+cd multiplayer
+npm install
+npm start          # http://localhost:3000
 ```
 
-Dann `http://localhost:8000` öffnen. Genauso funktioniert jeder Hoster, der Dateien
-ausliefert — GitHub Pages, Caddy, nginx, ein USB-Stick.
+Ein Gerät öffnet den **Erzähler-Bildschirm** und sieht alle Rollen, alle anderen treten
+mit einem **Lobby-Code** bei. Für kostenloses Hosting liegt ein `render.yaml` bei —
+Blueprint auf [render.com](https://render.com) importieren, fertig.
 
-### Tests
-
-```bash
-node tests.js
-```
-
-Prüft Balance über alle Spielerzahlen, alle Siegbedingungen, jede Sonderrolle, die
-Wirkung jedes Ereignisses und spielt **300 vollständige Partien** mit Zufallszügen durch,
-um Endlosschleifen und einseitige Balance auszuschließen.
+Details in [`multiplayer/README.md`](multiplayer/README.md).
 
 ---
 
-## Aufbau
+## Herkunft
 
-| Datei | Inhalt |
-|---|---|
-| `spiel.js` | Regeln, Rollen, Balance, Ereignisse, Zustandsmaschine — **kein DOM** |
-| `oberflaeche.js` | Zeichnet Ansichten, entscheidet nichts |
-| `index.html` | Gerüst und Gestaltung |
-| `tests.js` | Läuft mit Node, ohne Browser |
-
-Die Trennung ist Absicht: `spiel.js` lässt sich ohne Browser testen, und eine neue Rolle
-oder ein neues Ereignis braucht nur einen Eintrag in der jeweiligen Tabelle.
-
-### Eine Rolle ergänzen
-
-```js
-// in spiel.js, Objekt ROLLEN
-meineRolle: {
-  name: "Wächter", team: TEAM.DORF, symbol: "🔔",
-  kurz: "Kurzbeschreibung für die Vorschau",
-  text: "Was der Spieler auf seiner Rollenkarte liest",
-  nachtaktion: "wachen",   // oder null
-  reihenfolge: 15,         // wann in der Nacht (kleiner = früher)
-},
-```
-
-Dann in `verteilung()` festlegen, ab welcher Spielerzahl sie dabei ist, und in
-`fuehreAus()` die Wirkung ergänzen.
-
-### Ein Ereignis ergänzen
-
-```js
-// in spiel.js, Feld EREIGNISSE
-{
-  id: "unwetter", titel: "Unwetter", gewicht: 2, phase: "tag",
-  text: (n) => `${n} kommt nicht aus dem Haus.`,
-  wirkung: "stumm", brauchtSpieler: true,
-}
-```
-
-`gewicht` steuert die Häufigkeit. `wirkung` ist die Marke, die die Zustandsmaschine
-auswertet — bestehende Marken sind `stumm`, `doppelriss`, `blind`, `geheimwahl`,
-`keinewahl`, `vorstimme`, `doppelstimme`, `hinweis_wolfzahl`.
-
----
-
-## Browser
-
-Läuft in allem, was ES2020 kann. Die **Sprachausgabe** nutzt die Web-Speech-API — in
-Chrome, Edge und Safari vorhanden, in Firefox je nach System. Fehlt sie, wird der Schalter
-ausgegraut und alles andere funktioniert weiter.
-
----
+Entstanden im `lion-wiki`-Repo und am **2026-08-09** hierher ausgelagert — Anwendungscode
+gehört nicht in eine Wissensdatenbank. Die Projektdokumentation bleibt dort unter
+`wiki/projects/werwolf-schattenmoor.md`.
 
 ## Lizenz
 
