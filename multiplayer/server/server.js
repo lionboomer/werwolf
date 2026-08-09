@@ -26,6 +26,78 @@ function genToken() { return crypto.randomBytes(16).toString("hex"); }
 function genId() { return crypto.randomBytes(6).toString("hex"); }
 
 function aliveList(room) { return room.players.filter((p) => p.alive); }
+/* ---------------------------------------------------------------- Bots ----
+   Ein Bot handelt genau dort, wo sonst ein Mensch tippen muesste. Die Zuege
+   laufen ueber dieselben Zustandsfelder wie bei echten Spielern -- es gibt
+   keinen zweiten Regelweg, der auseinanderlaufen koennte.
+   Absichtlich simpel: zufaellige, aber immer gueltige Zuege. Ein Bot, der
+   klug spielt, wuerde die Runde dominieren; ein Bot, der Unsinn macht, wuerde
+   sie verderben.                                                            */
+function zufall(feld) {
+  return feld.length ? feld[Math.floor(Math.random() * feld.length)] : null;
+}
+
+function botZug(room) {
+  const bots = room.players.filter((p) => p.isBot);
+  if (!bots.length) return false;
+  const lebend = aliveList(room);
+  let getan = false;
+
+  if (room.phase === "reveal") {
+    bots.forEach((b) => { if (!b.ackedRole) { b.ackedRole = true; getan = true; } });
+  } else if (room.phase === "cupid") {
+    const amor = lebend.find((p) => p.role === "amor");
+    if (amor && amor.isBot && room.cupidPick.length < 2) {
+      const frei = lebend.filter((p) => !room.cupidPick.includes(p.id));
+      while (room.cupidPick.length < 2 && frei.length) {
+        const w = zufall(frei); room.cupidPick.push(w.id);
+        frei.splice(frei.indexOf(w), 1);
+      }
+      getan = true;
+    }
+  } else if (room.phase === "seer") {
+    const s = lebend.find((p) => p.role === "seherin");
+    if (s && s.isBot) {
+      // Zwei Schritte wie beim Menschen: erst schauen, dann die Augen schliessen.
+      if (room.seerResult == null) {
+        const z = zufall(lebend.filter((p) => p.id !== s.id));
+        if (z) { room.seerResult = z.id; getan = true; }
+      } else { afterSeer(room); getan = true; }
+    }
+  } else if (room.phase === "wolves") {
+    const woelfe = lebend.filter((p) => p.role === "werwolf");
+    if (woelfe.length && woelfe.every((w) => w.isBot)) {
+      if (room.wolfTarget == null) {
+        const z = zufall(lebend.filter((p) => p.role !== "werwolf")) || zufall(lebend);
+        if (z) { room.wolfTarget = z.id; room.wolfConfirmedBy = []; getan = true; }
+      } else { afterWolves(room); getan = true; }
+    }
+  } else if (room.phase === "witch") {
+    const h = lebend.find((p) => p.role === "hexe");
+    if (h && h.isBot) {
+      // Bots halten ihre Traenke zurueck -- so verschenken sie nichts.
+      if (room.witchStep === "ask-heal") { room.witchStep = "ask-poison"; getan = true; }
+      else if (room.witchStep === "ask-poison") { room.witchPoisonTarget = null; resolveNight(room); getan = true; }
+    }
+  } else if (room.phase === "day-vote") {
+    lebend.filter((p) => p.isBot && room.votesCast[p.id] == null).forEach((b) => {
+      let ziele = lebend.filter((p) => p.id !== b.id);
+      if (room.voteRestrict) ziele = ziele.filter((p) => room.voteRestrict.includes(p.id));
+      const z = zufall(ziele);
+      if (z) { room.votesCast[b.id] = z.id; getan = true; }
+    });
+  } else if (room.phase === "hunter-shot") {
+    const j = room.players.find((p) => p.id === room.hunterQueue[0]);
+    if (j && j.isBot) {
+      if (room.hunterTarget == null) {
+        const z = zufall(lebend.filter((p) => p.id !== j.id));
+        if (z) { room.hunterTarget = z.id; getan = true; }
+      } else { handleHunterConfirm(room, room.hunterTarget); getan = true; }
+    }
+  }
+  return getan;
+}
+
 function byId(room, id) { return room.players.find((p) => p.id === id); }
 
 function dedupeName(room, name) {
@@ -102,6 +174,13 @@ function applyDeaths(room, ids, causeMap) {
   return newlyDead;
 }
 
+/* Kleine Runden brauchen zwei Ausnahmen, sonst ist eine Dreierpartie nach der
+   ersten Nacht entschieden -- bevor ueberhaupt geredet wurde. Identisch zur
+   Ein-Geraet-Fassung. */
+const KLEINE_RUNDE = 4;
+
+function istKleineRunde(room) { return room.players.length <= KLEINE_RUNDE; }
+
 function checkWin(room) {
   const liv = aliveList(room);
   if (liv.length === 2 && liv[0].lover === liv[1].id && liv[1].lover === liv[0].id) {
@@ -110,7 +189,9 @@ function checkWin(room) {
   const wolves = liv.filter((p) => p.role === "werwolf").length;
   const village = liv.length - wolves;
   if (wolves === 0) return { type: "village" };
-  if (wolves >= village) return { type: "wolves" };
+  // Klein: erst wenn wirklich niemand mehr uebrig ist. Sonst: Gleichstand genuegt.
+  const ende = istKleineRunde(room) ? village === 0 : wolves >= village;
+  if (ende) return { type: "wolves" };
   return null;
 }
 
@@ -134,7 +215,16 @@ function nextAfterCupid(room) {
 
 function afterCupid(room) { room.phase = nextAfterCupid(room); }
 
-function afterSeer(room) { room.phase = "wolves"; }
+function afterSeer(room) {
+  // Kleine Runde, erste Nacht: das Rudel zieht nur seine Kreise.
+  if (istKleineRunde(room) && room.night === 1) {
+    room.wolfTarget = null;
+    pushLog(room, "Die Runde ist klein — das Rudel reißt in dieser Nacht nicht.", "narr");
+    afterWolves(room);
+    return;
+  }
+  room.phase = "wolves";
+}
 
 function afterWolves(room) {
   const hasWitch = aliveList(room).some((p) => p.role === "hexe");
@@ -237,6 +327,7 @@ function publicRosterFor(room, viewerId) {
       alive: p.alive,
       connected: p.connected,
       isYou: p.id === viewerId,
+      isBot: !!p.isBot,
       role: revealed ? p.role : null,
       roleName: revealed && p.role ? ROLES[p.role].name : null,
       ackedRole: p.ackedRole,
@@ -365,6 +456,18 @@ function sendJSON(ws, obj) {
 }
 
 function broadcast(room) {
+  // Erst zeichnen, dann die Bots ziehen lassen und noch einmal zeichnen --
+  // so sehen alle Geraete den Zug, statt ihn zu ueberspringen.
+  broadcastRoh(room);
+  if (room.__botLauft) return;
+  room.__botLauft = true;
+  setTimeout(() => {
+    room.__botLauft = false;
+    try { if (botZug(room)) broadcast(room); } catch (e) { console.error("Bot:", e); }
+  }, 700);
+}
+
+function broadcastRoh(room) {
   room.lastActivity = Date.now();
   if (room.narratorWs) sendJSON(room.narratorWs, buildStateFor(room, "narrator"));
   room.players.forEach((p) => { if (p.ws) sendJSON(p.ws, buildStateFor(room, p.id)); });
@@ -518,10 +621,35 @@ function handleNarratorMessage(room, ws, msg) {
       }
       return;
     }
+    case "addBot": {
+      // Bots fuellen kleine Runden auf. Sie haben keine Verbindung, bestaetigen
+      // ihre Rolle sofort und handeln zufaellig -- ein Bot bluffft nicht, er
+      // ersetzt nur die fehlende Hand am Tisch.
+      if (room.phase !== "lobby") return;
+      if (room.players.length >= 12) {
+        sendJSON(ws, { t: "error", message: "Lobby ist voll (max. 12)." }); return;
+      }
+      const n = room.players.filter((p) => p.isBot).length + 1;
+      room.players.push({
+        id: genId(), token: genToken(), name: dedupeName(room, "Bot " + n),
+        ws: null, connected: true, alive: true, role: null, lover: null,
+        ackedRole: false, isBot: true
+      });
+      broadcast(room);
+      return;
+    }
+    case "removeBot": {
+      if (room.phase !== "lobby") return;
+      for (let i = room.players.length - 1; i >= 0; i--) {
+        if (room.players[i].isBot) { room.players.splice(i, 1); break; }
+      }
+      broadcast(room);
+      return;
+    }
     case "startGame": {
       if (room.phase !== "lobby") return;
       const count = room.players.length;
-      if (count < 5 || count > 12) return;
+      if (count < 3 || count > 12) return;
       const pool = rolePoolFor(count);
       room.players.forEach((p, i) => { p.role = pool[i]; p.alive = true; p.lover = null; p.ackedRole = false; });
       room.night = 1;

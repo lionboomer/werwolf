@@ -93,8 +93,15 @@ Fehlt die Sprachausgabe im Browser (Firefox je nach System), läuft alles andere
 ```bash
 cd multiplayer
 npm install
-npm start          # http://localhost:3000
+npm start          # http://localhost:8791
 ```
+
+**Bei Lion läuft er schon:** [werwolf.lionwitte.de](https://werwolf.lionwitte.de/) für
+Spieler, `/narrator` für den Erzähler.
+
+**Zu wenige am Tisch?** Der Erzähler füllt die Lobby per Knopfdruck mit **Bots** auf.
+Sie ziehen zufällig, aber immer regelkonform — sie bluffen nicht, sie ersetzen nur die
+fehlende Hand. Damit läuft schon eine Dreierrunde.
 
 Ein Gerät öffnet den **Erzähler-Bildschirm** und sieht alle Rollen, alle anderen treten
 mit einem **Lobby-Code** bei. Für kostenloses Hosting liegt ein `render.yaml` bei —

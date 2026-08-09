@@ -153,14 +153,30 @@
 
   function renderLobby(s){
     const count = s.players.length;
-    const canStart = count>=5 && count<=12;
+    const bots = s.players.filter(p=>p.isBot).length;
+    const canStart = count>=3 && count<=12;
+    const klein = count>0 && count<=4;
     setScene(`
       <div class="code-display panel">
         <div class="eyebrow">Lobby-Code — den Spieler:innen zum Beitritt geben</div>
         <div class="code">${s.code}</div>
       </div>
       ${rosterPanel(s)}
-      <p class="hint">${canStart ? "" : `Braucht 5–12 Spieler zum Start (aktuell ${count}).`}</p>
+      <div class="panel">
+        <div class="eyebrow">Zu wenige am Tisch?</div>
+        <p class="hint" style="margin:.4em 0">
+          Bots füllen die Runde auf. Sie ziehen zufällig, aber immer regelkonform —
+          sie bluffen nicht, sie ersetzen nur die fehlende Hand.
+          ${bots ? `<b>${bots} Bot${bots>1?"s":""} dabei.</b>` : ""}
+        </p>
+        <div style="display:flex;gap:8px">
+          <button class="btn" data-action="add-bot" ${count>=12?"disabled":""}>+ Bot</button>
+          <button class="btn" data-action="remove-bot" ${bots?"":"disabled"}>− Bot</button>
+        </div>
+      </div>
+      <p class="hint">${canStart
+        ? (klein ? "Kleine Runde: In Nacht 1 reißt das Rudel nicht, und die Wölfe gewinnen erst, wenn alle Dorfbewohner tot sind." : "")
+        : `Braucht 3–12 Spieler zum Start (aktuell ${count}).`}</p>
       <button class="btn" data-action="start-game" ${canStart?"":"disabled"}>Rollen verteilen &amp; Spiel starten</button>
     `, "phase-night");
   }
@@ -300,6 +316,8 @@
     const action = btn.getAttribute("data-action");
     if(action==="create-room"){ send({t:"createRoom"}); return; }
     if(action==="kick"){ send({t:"kick", playerId: btn.getAttribute("data-id")}); return; }
+    if(action==="add-bot"){ send({t:"addBot"}); return; }
+    if(action==="remove-bot"){ send({t:"removeBot"}); return; }
     if(action==="start-game"){ send({t:"startGame"}); return; }
     if(action==="advance"){ send({t:"advance"}); return; }
     if(action==="timer-toggle"){ send({t:"timerToggle"}); return; }

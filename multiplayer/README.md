@@ -94,3 +94,37 @@ werwolf-multiplayer/
     ├── roles.js       — Rollen-Metadaten + Icons (clientseitig, von beiden Ansichten genutzt)
     └── style.css      — geteiltes Design
 ```
+
+## Bots für kleine Runden
+
+Sind zu wenige am Tisch, füllt der Erzähler die Lobby mit Bots auf — Knöpfe **+ Bot** /
+**− Bot** im Lobby-Bildschirm.
+
+Ein Bot zieht **zufällig, aber immer regelkonform**: Er bestätigt seine Rolle sofort,
+wählt nachts ein gültiges Ziel, stimmt tagsüber für jemanden ab und hält als Hexe seine
+Tränke zurück. Er bluffft nicht und deduziert nicht — er ersetzt nur die fehlende Hand
+am Tisch. Das ist Absicht: Ein kluger Bot würde die Runde dominieren, ein wirrer sie
+verderben.
+
+Bots handeln über **dieselben Zustandsfelder** wie echte Spieler. Es gibt keinen zweiten
+Regelweg, der auseinanderlaufen könnte.
+
+**Geprüft** mit je 6 vollständigen Partien: 3 Spieler → 3× Dorf / 3× Wölfe,
+6 Spieler → 2× Dorf / 4× Wölfe (bei reinen Zufallszügen erwartbar — echte Spieler
+deduzieren, Bots nicht). Keine Partie blieb hängen.
+
+## Kleine Runde (3–4 Spieler)
+
+Gleiche Ausnahmen wie in der Ein-Gerät-Fassung: **kein Riss in Nacht 1**, und die Wölfe
+gewinnen erst bei **vollständiger Auslöschung** statt schon bei Gleichstand. Ohne beides
+wäre eine Dreierpartie nach der ersten Nacht entschieden.
+
+## Betrieb bei Lion
+
+Läuft als systemd-Dienst in **CT122** (neben Caddy), Port 8791, Benutzer `werwolf`,
+gehärtet über `ProtectSystem=strict`.
+
+Öffentlich erreichbar unter **https://werwolf.lionwitte.de/** (Spieler) und
+**/narrator** (Erzähler) — Caddy reicht die WebSocket-Verbindung mit einer Stunde
+Zeitlimit durch, damit eine stille Lobby nicht getrennt wird. Der Name liegt als lokaler
+DNS-Eintrag in Pi-hole auf `192.168.178.14`.

@@ -9,7 +9,12 @@ const ROLES = {
   amor: { name: "Amor", team: "village" }
 };
 
+/* Kleine Runden (3-4) folgen denselben Ausnahmen wie die Ein-Geraet-Fassung:
+   kein Riss in Nacht 1, und die Woelfe gewinnen erst bei vollstaendiger
+   Ausloeschung statt schon bei Gleichstand. Siehe KLEINE_RUNDE in server.js. */
 const DIST = {
+  3:  { werwolf: 1, seherin: 1, dorfbewohner: 1 },
+  4:  { werwolf: 1, seherin: 1, dorfbewohner: 2 },
   5:  { werwolf: 1, seherin: 1, dorfbewohner: 3 },
   6:  { werwolf: 1, seherin: 1, dorfbewohner: 4 },
   7:  { werwolf: 2, seherin: 1, hexe: 1, dorfbewohner: 3 },
