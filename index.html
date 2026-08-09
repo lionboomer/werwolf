@@ -468,7 +468,14 @@
   };
   const NARRATOR_ICON = ICON.narrator;
 
+  /* Kleine Runden (3-4) folgen eigenen Regeln, siehe KLEINE_RUNDE weiter unten:
+     In Nacht 1 reisst das Rudel nicht, und die Woelfe gewinnen erst, wenn ALLE
+     Dorfbewohner tot sind - nicht schon bei Gleichstand. Ohne diese beiden
+     Ausnahmen waere eine Dreierrunde vor der ersten Diskussion entschieden. */
+  const KLEINE_RUNDE = 4;              // bis zu dieser Spielerzahl gelten sie
   const DIST = {
+    3:  {werwolf:1, seherin:1, dorfbewohner:1},
+    4:  {werwolf:1, seherin:1, dorfbewohner:2},
     5:  {werwolf:1, seherin:1, dorfbewohner:3},
     6:  {werwolf:1, seherin:1, dorfbewohner:4},
     7:  {werwolf:2, seherin:1, hexe:1, dorfbewohner:3},
@@ -552,7 +559,10 @@
     const wolves = liv.filter(p=>p.role==="werwolf").length;
     const village = liv.length - wolves;
     if(wolves===0) return {type:"village"};
-    if(wolves>=village) return {type:"wolves"};
+    // In kleinen Runden zaehlt nur die vollstaendige Ausloeschung. Sonst haette
+    // der erste Riss das Spiel sofort beendet (1 Wolf gegen 1 Dorfbewohner).
+    const parität = S.players.length <= KLEINE_RUNDE ? village === 0 : wolves >= village;
+    if(parität) return {type:"wolves"};
     return null;
   }
 
@@ -1124,6 +1134,7 @@
       case "night-intro": return renderNightIntro();
       case "cupid": return renderCupid();
       case "wolves": return renderWolves();
+      case "wolves-ruhig": return renderWolvesRuhig();
       case "seer": return renderSeer();
       case "witch": return renderWitch();
       case "morning": return renderMorning();
@@ -1183,7 +1194,28 @@
 
   function afterCupid(){ S.sleepPrefix = sleepLine("Amor"); S.screen = nextAfterCupid(); render(); }
 
-  function afterSeer(){ S.sleepPrefix = sleepLine("Die Seherin"); S.screen = "wolves"; render(); }
+  function kleineRunde(){ return S.players.length <= KLEINE_RUNDE; }
+
+  function afterSeer(){
+    S.sleepPrefix = sleepLine("Die Seherin");
+    // Kleine Runde, erste Nacht: das Rudel zieht nur seine Kreise.
+    S.screen = (kleineRunde() && S.night === 1) ? "wolves-ruhig" : "wolves";
+    render();
+  }
+
+  function renderWolvesRuhig(){
+    setScene(`
+      <div class="panel">
+        ${narratorBlock("Der Erzähler spricht",
+          (S.sleepPrefix ? S.sleepPrefix + " " : "") +
+          "Die Werwölfe erwachen. Doch die Runde ist klein, das Moor liegt offen — " +
+          "wer heute Nacht reißt, verrät sich morgen selbst. Das Rudel zieht nur " +
+          "seine Kreise und legt sich wieder schlafen. <b>In dieser Nacht stirbt niemand.</b>")}
+      </div>
+      <button class="btn" data-action="wolves-ruhig-weiter">Weiter</button>
+    `, "phase-night");
+    S.sleepPrefix = "";
+  }
 
   function afterWolves(){
     S.sleepPrefix = sleepLine("Die Werwölfe", true);
@@ -1260,8 +1292,16 @@
     sfx.tap();
 
     if(action==="count-inc"){ S.count = Math.min(12, S.count+1); syncNames(); render(); return; }
-    if(action==="count-dec"){ S.count = Math.max(5, S.count-1); syncNames(); render(); return; }
+    if(action==="count-dec"){ S.count = Math.max(3, S.count-1); syncNames(); render(); return; }
     if(action==="start-game"){ initGame(S.count, S.names); render(); return; }
+    if(action==="wolves-ruhig-weiter"){
+      S.night_wolfTarget = null;
+      S.sleepPrefix = sleepLine("Die Werwölfe", true);
+      const hatHexe = alive().some(p=>p.role==="hexe");
+      S.screen = hatHexe ? "witch" : "resolve-night";
+      if(S.screen==="resolve-night"){ resolveNight(); return; }
+      render(); return;
+    }
 
     if(action==="reveal-flip"){ S.cardFlipped=true; sfx.flip(); render(); return; }
     if(action==="reveal-next"){

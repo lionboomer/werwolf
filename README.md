@@ -32,6 +32,8 @@ nächste geweckt wird — so verrät die Pause niemanden.
 
 | Spieler | 🐺 Wölfe | 🔮 Seherin | 🧪 Hexe | 🏹 Jäger | 💘 Amor | 🧑‍🌾 Dorf |
 |---|---|---|---|---|---|---|
+| **3** | 1 | 1 | – | – | – | 1 |
+| **4** | 1 | 1 | – | – | – | 2 |
 | 5 | 1 | 1 | – | – | – | 3 |
 | 6 | 1 | 1 | – | – | – | 4 |
 | 7 | 2 | 1 | 1 | – | – | 3 |
@@ -44,6 +46,25 @@ nächste geweckt wird — so verrät die Pause niemanden.
 > **Balance-Entscheid:** Bei 6 Spielern standen vorher Seherin *und* Hexe gegen einen
 > einzigen Wolf — erdrückend. Jetzt gibt es dort nur **eine** Sonderrolle, dafür einen
 > Dorfbewohner mehr. Die Hexe kommt ab 7 Spielern dazu.
+
+### Kleine Runde (3–4 Spieler)
+
+Zu dritt bricht das normale Regelwerk: Der Wolf reißt in Nacht 1 einen von zwei
+Dorfbewohnern, steht dann eins zu eins da — und **gewinnt durch Gleichstand, bevor
+überhaupt geredet wurde**. Deshalb gelten ab 4 Spielern abwärts zwei Ausnahmen:
+
+1. **In Nacht 1 reißt das Rudel nicht.** Der Erzähler erklärt es im Spiel: „Die Runde
+   ist klein, das Moor liegt offen — wer heute Nacht reißt, verrät sich morgen selbst."
+   Die Seherin schaut trotzdem.
+2. **Die Wölfe gewinnen erst, wenn *alle* Dorfbewohner tot sind** — nicht schon bei
+   Gleichstand.
+
+Damit läuft eine Dreierrunde so: eine Nacht mit Vision, **eine** Diskussion, **eine**
+Abstimmung. Trifft das Dorf den Wolf, gewinnt es. Trifft es daneben, holt sich der Wolf
+in Nacht 2 den Rest.
+
+Kurz, dicht und ohne Leerlauf — das Salz liegt darin, dass der Wolf ebenso gut behaupten
+kann, die Seherin zu sein. Bei 4 Spielern bekommt das Dorf entsprechend zwei Versuche.
 
 **Hausregel Wolfs-Selbstwahl:** Die Werwölfe dürfen **jeden Lebenden** reißen, auch einen
 Mitwolf oder sich selbst — mit eigener Erzähler-Meldung („Das Rudel hat sich selbst
