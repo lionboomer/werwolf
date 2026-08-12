@@ -13,6 +13,11 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O/0, I/1
 
 const rooms = new Map(); // code -> room
+// Ohne Grenze koennte jemand beliebig viele Lobbys anlegen und den Speicher
+// volllaufen lassen. 60 gleichzeitige Runden sind fuer ein Partyspiel im
+// Freundeskreis reichlich; darueber wird abgelehnt statt langsam zu sterben.
+const MAX_RAEUME = Number(process.env.MAX_RAEUME || 60);
+const MAX_BOTS = Number(process.env.MAX_BOTS || 10);
 
 /* ---------------- helpers ---------------- */
 
@@ -241,7 +246,8 @@ function newRoom(code, narratorToken) {
 
 /* ---------------- game engine ---------------- */
 
-function pushLog(room, text, cls) { room.log.push({ text, cls: cls || "" }); }
+function pushLog(room, text, cls) {
+  room.zuletztAktiv = Date.now(); room.log.push({ text, cls: cls || "" }); }
 
 function applyDeaths(room, ids, causeMap) {
   const newlyDead = [];
@@ -645,6 +651,23 @@ function handleMessage(ws, msg) {
   const t = msg.t;
 
   if (t === "createRoom") {
+    // Deckel gegen das Volllaufen. Alte, leere Raeume vorher wegraeumen --
+    // sie halten sonst Codes und Speicher belegt, obwohl niemand mehr spielt.
+    if (rooms.size >= MAX_RAEUME) {
+      const jetzt = Date.now();
+      for (const [code, r] of rooms) {
+        // Der Erzaehler haengt an room.narratorWs, nicht an einem Flag. Ohne
+        // diese Pruefung haette das Aufraeumen eine laufende Runde geloescht,
+        // an der gerade nur niemand tippt.
+        const erzDa = r.narratorWs && r.narratorWs.readyState === 1;
+        const leer = !r.players.some((p) => p.connected) && !erzDa;
+        if (leer && jetzt - (r.zuletztAktiv || 0) > 1800000) rooms.delete(code);
+      }
+      if (rooms.size >= MAX_RAEUME) {
+        sendJSON(ws, { t: "error", message: "Gerade sind zu viele Runden offen. Bitte gleich nochmal." });
+        return;
+      }
+    }
     const code = genCode();
     const token = genToken();
     const room = newRoom(code, token);
@@ -726,6 +749,12 @@ function handleNarratorMessage(room, ws, msg) {
       // ihre Rolle sofort und handeln zufaellig -- ein Bot bluffft nicht, er
       // ersetzt nur die fehlende Hand am Tisch.
       if (room.phase !== "lobby") return;
+      // Jeder Bot erzeugt Modellaufrufe. Die Lobbygrenze allein reicht deshalb
+      // nicht -- eine Runde aus zwoelf Bots waere ein Selbstlaeufer auf Lions
+      // Rechnung, ohne dass ein Mensch mitspielt.
+      if (room.players.filter((p) => p.isBot).length >= MAX_BOTS) {
+        sendJSON(ws, { t: "error", message: `Höchstens ${MAX_BOTS} Bots je Runde.` }); return;
+      }
       if (room.players.length >= 12) {
         sendJSON(ws, { t: "error", message: "Lobby ist voll (max. 12)." }); return;
       }

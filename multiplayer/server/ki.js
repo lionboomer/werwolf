@@ -17,7 +17,29 @@ const MODELL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const SCHLUESSEL = process.env.OPENAI_API_KEY || "";
 const ZEITLIMIT = Number(process.env.OPENAI_TIMEOUT_MS || 12000);
 
-function kiAktiv() { return Boolean(SCHLUESSEL); }
+/* --- Kostendeckel -----------------------------------------------------------
+   Das Spiel ist absichtlich ohne Anmeldung von aussen erreichbar -- Lions
+   Freunde sollen einfach mitspielen koennen. Seit die Bots reden, haengt daran
+   aber eine kostenpflichtige Schnittstelle. Ohne Deckel koennte jemand
+   beliebig viele Runden mit Bots aufmachen und die Rechnung treiben.
+   Deshalb ein gleitendes Stundenfenster. Ist es voll, schweigen die Bots und
+   ziehen wie frueher zufaellig -- das Spiel bleibt spielbar, nur stiller. */
+const RUFE_JE_STUNDE = Number(process.env.OPENAI_MAX_PRO_STUNDE || 400);
+let rufe = [];
+
+function budgetFrei() {
+  const jetzt = Date.now();
+  rufe = rufe.filter((t) => jetzt - t < 3600000);
+  return rufe.length < RUFE_JE_STUNDE;
+}
+function budgetZaehlen() { rufe.push(Date.now()); }
+function budgetStand() {
+  const jetzt = Date.now();
+  rufe = rufe.filter((t) => jetzt - t < 3600000);
+  return { verbraucht: rufe.length, grenze: RUFE_JE_STUNDE };
+}
+
+function kiAktiv() { return Boolean(SCHLUESSEL) && budgetFrei(); }
 
 /* Charaktere. Sie geben den Bots eine erkennbare Stimme -- ohne sie klingen
    alle gleich und das Misstrauen hat keinen Ansatzpunkt. */
@@ -92,6 +114,8 @@ function systemText(room, bot, hilfen) {
 }
 
 async function frageModell(system, benutzer, maxTokens) {
+  if (!budgetFrei()) throw new Error("Stundenbudget erschoepft");
+  budgetZaehlen();
   const steuerung = new AbortController();
   const uhr = setTimeout(() => steuerung.abort(), ZEITLIMIT);
   try {
@@ -180,4 +204,4 @@ async function botStimme(room, bot, erlaubteNamen, hilfen) {
   }
 }
 
-module.exports = { kiAktiv, botBeitrag, botStimme, charakterFuer, MODELL };
+module.exports = { kiAktiv, botBeitrag, botStimme, charakterFuer, MODELL, budgetStand };
