@@ -17,6 +17,22 @@ const rooms = new Map(); // code -> room
 // volllaufen lassen. 60 gleichzeitige Runden sind fuer ein Partyspiel im
 // Freundeskreis reichlich; darueber wird abgelehnt statt langsam zu sterben.
 const MAX_RAEUME = Number(process.env.MAX_RAEUME || 60);
+// Verlassene Runden regelmaessig wegraeumen, nicht erst wenn jemand eine neue
+// aufmachen will. Sie halten sonst Codes, Speicher und geplante Zeitgeber.
+setInterval(() => {
+  const jetzt = Date.now();
+  for (const [code, r] of rooms) {
+    const menschDa = r.players.some((p) => !p.isBot && p.connected)
+      || (r.narratorWs && r.narratorWs.readyState === 1);
+    if (menschDa) continue;
+    if (jetzt - (r.zuletztAktiv || jetzt) > 3600000) {
+      clearTimeout(r.kiGeplant);
+      stopTimer(r);
+      rooms.delete(code);
+      console.log("[aufraeumen] verlassene Runde", code, "entfernt");
+    }
+  }
+}, 300000).unref();
 const MAX_BOTS = Number(process.env.MAX_BOTS || 10);
 
 /* ---------------- helpers ---------------- */
@@ -139,6 +155,16 @@ function kiDiskussion(room) {
   if (room.kiBeitraege >= KI_MAX_BEITRAEGE) return;
   const bots = aliveList(room).filter((p) => p.isBot);
   if (!bots.length) return;
+  // Kein Mensch da, kein Modellaufruf. Bots, die sich gegenseitig zutexten,
+  // waehrend niemand zusieht, sind reine Verschwendung -- und genau so haette
+  // eine verlassene Runde stundenlang auf Lions Rechnung weitergeredet.
+  const menschDa = room.players.some((p) => !p.isBot && p.connected)
+    || (room.narratorWs && room.narratorWs.readyState === 1);
+  if (!menschDa) {
+    clearTimeout(room.kiGeplant);
+    room.kiGeplant = null;
+    return;
+  }
   // Wer am laengsten nichts gesagt hat, kommt dran -- sonst reden immer dieselben.
   bots.sort((a, b) => (a.zuletztGeredet || 0) - (b.zuletztGeredet || 0));
   const bot = bots[0];
@@ -165,6 +191,11 @@ function kiDiskussion(room) {
 }
 
 function kiStimmenHolen(room, bots) {
+  // Auch hier: ohne Zuschauer keine Modellaufrufe. Die Bots stimmen dann
+  // zufaellig ab, wie vor der KI -- die Runde laeuft weiter, nur stumm.
+  const menschDa = room.players.some((p) => !p.isBot && p.connected)
+    || (room.narratorWs && room.narratorWs.readyState === 1);
+  if (!menschDa) return;
   const lebend = aliveList(room);
   bots.forEach((b) => {
     if (b.kiStimmeLaeuft) return;
