@@ -200,3 +200,32 @@ input.code-input{ font-family: var(--font-mono); letter-spacing:0.3em; text-tran
   .panel{ padding:18px; }
   .code-display .code{ font-size:2.2rem; }
 }
+
+
+/* ------------------------------------------------- Dorfversammlung (Chat) --
+   Beitraege von Bots sind sichtbar als solche markiert. Sie als Menschen
+   auszugeben waere ein billiger Trick -- das Spiel lebt davon, dass man den
+   Mitspielern misstraut, nicht der Anzeige. */
+.chat-panel{display:flex;flex-direction:column;gap:10px}
+.chat-kopf{font-weight:700;letter-spacing:.03em;color:var(--candle);
+           display:flex;align-items:center;gap:8px;font-size:.95rem}
+.chat-marke{font-size:.66rem;font-weight:700;letter-spacing:.04em;padding:2px 7px;
+            border-radius:999px;background:rgba(155,127,212,.22);color:#c3aef0;
+            text-transform:uppercase}
+.chat-lauf{max-height:38vh;overflow-y:auto;display:flex;flex-direction:column;gap:9px;
+           padding-right:4px;scroll-behavior:smooth}
+.chat-zeile{animation:chat-rein .35s ease-out both;line-height:1.45}
+@keyframes chat-rein{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+.chat-wer{font-weight:700;color:var(--candle);margin-right:7px}
+.chat-zeile.ist-bot .chat-wer{color:#c3aef0}
+.chat-text{color:var(--parchment)}
+.chat-leer{color:var(--muted);font-style:italic;text-align:center;padding:10px 0}
+.chat-form{display:flex;gap:8px}
+.chat-form input{flex:1;min-width:0;font:inherit;padding:11px 13px;border-radius:11px;
+                 border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.32);
+                 color:var(--parchment)}
+.chat-form input:focus{outline:none;border-color:var(--candle)}
+.chat-form button{font:inherit;font-weight:700;padding:11px 16px;border-radius:11px;
+                  border:0;background:var(--candle);color:#1a1206;cursor:pointer}
+.chat-form button:active{transform:translateY(1px)}
+@media(prefers-reduced-motion:reduce){.chat-zeile{animation:none}}

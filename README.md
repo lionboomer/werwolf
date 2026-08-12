@@ -100,8 +100,36 @@ npm start          # http://localhost:8791
 Spieler, `/narrator` für den Erzähler.
 
 **Zu wenige am Tisch?** Der Erzähler füllt die Lobby per Knopfdruck mit **Bots** auf.
-Sie ziehen zufällig, aber immer regelkonform — sie bluffen nicht, sie ersetzen nur die
-fehlende Hand. Damit läuft schon eine Dreierrunde.
+Damit läuft schon eine Dreierrunde.
+
+### KI-Dorfbewohner
+
+Liegt ein OpenAI-Schlüssel vor, **reden die Bots mit** — in einer echten
+Dorfversammlung mit Chat, in die auch die Menschen tippen.
+
+- Jeder Bot hat einen **festen Charakter** (misstrauisch, ruhig, vorlaut, ängstlich,
+  analytisch, gesellig), stabil an seinen Namen gebunden. Ohne das klingen alle gleich
+  und das Misstrauen hat keinen Ansatzpunkt.
+- **Werwolf-Bots lügen.** Sie streiten ihre Rolle ab und lenken Verdacht auf Unschuldige.
+- Bots **begründen ihre Stimme** und schreiben den Grund in den Chat.
+- Beiträge der Bots sind sichtbar **als KI markiert**. Sie als Menschen auszugeben wäre
+  ein billiger Trick — das Spiel lebt davon, dass man den Mitspielern misstraut, nicht
+  der Anzeige.
+
+**Die Regel, die alles trägt: Ein Bot weiß nur, was ein Mensch an seiner Stelle wüsste.**
+Der Kontext wird pro Bot aus dessen eigenem Blickwinkel gebaut — eigene Rolle,
+öffentlicher Verlauf, Chat; Mitwölfe nur für Werwölfe, Visionen nur für die Seherin.
+Ein Bot, der heimlich alle Rollen kennt, wäre kein cleverer Gegner, sondern ein Betrüger.
+
+**Ohne Schlüssel läuft alles weiter** — die Bots ziehen dann zufällig, aber immer
+regelkonform. Ein Partyspiel darf nie an einem fremden Dienst hängenbleiben; auch
+Zeitüberschreitungen und API-Fehler fallen still auf das Würfeln zurück.
+
+```bash
+export OPENAI_API_KEY=sk-…       # nichts davon gehört ins Repo
+export OPENAI_MODEL=gpt-4o-mini  # Vorgabe
+npm start
+```
 
 Ein Gerät öffnet den **Erzähler-Bildschirm** und sieht alle Rollen, alle anderen treten
 mit einem **Lobby-Code** bei. Für kostenloses Hosting liegt ein `render.yaml` bei —

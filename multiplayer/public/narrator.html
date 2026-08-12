@@ -252,6 +252,26 @@
     `, "phase-day");
   }
 
+  function escapeHtml(s){
+    return String(s == null ? "" : s)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  /* Der Erzähler liest die Versammlung mit -- er soll den Faden kennen, wenn er
+     die Abstimmung öffnet. Beiträge der Bots sind markiert. */
+  function chatMitlesen(s){
+    const zeilen = (s.chat||[]).map(m => `
+      <div class="chat-zeile ${m.art==='bot'?'ist-bot':''}">
+        <span class="chat-wer">${escapeHtml(m.name)}${m.art==='bot'?' <span class="chat-marke">KI</span>':''}</span>
+        <span class="chat-text">${escapeHtml(m.text)}</span>
+      </div>`).join("") ||
+      `<div class="chat-leer">Noch ist es still im Dorf.</div>`;
+    return `<div class="panel chat-panel">
+      <div class="chat-kopf">Dorfversammlung${s.kiAn?' <span class="chat-marke">Bots reden mit</span>':''}</div>
+      <div class="chat-lauf" id="chatLauf">${zeilen}</div></div>`;
+  }
+
   function renderDayDiscuss(s){
     const t = s.timer.seconds, total = s.timer.total;
     const circumference = 2*Math.PI*78;
@@ -271,6 +291,7 @@
           <button class="round-btn" data-action="timer-adjust" data-delta="30">+30s</button>
         </div>
       </div>
+      ${chatMitlesen(s)}
       ${rosterPanel(s)}
       <button class="btn" data-action="to-vote">Zur Abstimmung</button>
     `, "phase-day");

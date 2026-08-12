@@ -108,6 +108,15 @@
     ws.onerror = () => {};
   }
 
+  /* Chattexte stammen von Mitspielern und aus einem Sprachmodell. Beides wird
+     als HTML eingesetzt und muss deshalb entschaerft werden -- sonst genuegt
+     ein Spielername mit spitzer Klammer, um fremdes Markup einzuschleusen. */
+  function escapeHtml(s){
+    return String(s == null ? "" : s)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
   function send(obj){ if(ws && ws.readyState===ws.OPEN) ws.send(JSON.stringify(obj)); }
 
   function handleServerMessage(msg){
@@ -217,6 +226,19 @@
   }
 
   /* ---------- phase renders ---------- */
+  // Absenden per Formular statt per Knopf-Klick: so funktioniert auch die
+  // Eingabetaste auf der Handytastatur.
+  document.addEventListener("submit", function(ev){
+    const f = ev.target.closest('[data-action="chat-send"]');
+    if(!f) return;
+    ev.preventDefault();
+    const feld = f.querySelector("input");
+    const text = (feld.value||"").trim();
+    if(!text) return;
+    send({ t:"chat", text });
+    feld.value = "";
+  });
+
   function render(){
     if(!latest){ renderJoinScreen(); return; }
     updateNightCounter();
@@ -400,6 +422,31 @@
     `, "phase-day");
   }
 
+  /* Die Dorfversammlung. Bots melden sich hier selbst zu Wort -- ihre Beitraege
+     sind als solche gekennzeichnet, damit niemand glaubt, ein Mensch habe
+     geschrieben. Verschleierung waere ein billiger Trick und nimmt dem Spiel
+     die Ehrlichkeit, auf die es sonst aufbaut. */
+  function chatBlock(s){
+    const zeilen = (s.chat||[]).map(m => `
+      <div class="chat-zeile ${m.art==='bot'?'ist-bot':''}">
+        <span class="chat-wer">${escapeHtml(m.name)}${m.art==='bot'?' <span class="chat-marke">KI</span>':''}</span>
+        <span class="chat-text">${escapeHtml(m.text)}</span>
+      </div>`).join("") ||
+      `<div class="chat-leer">Noch hat niemand etwas gesagt. Fang an.</div>`;
+    const eingabe = s.me.alive ? `
+      <form class="chat-form" data-action="chat-send">
+        <input id="chatInput" type="text" maxlength="240" autocomplete="off"
+               placeholder="Sag etwas in die Runde …">
+        <button type="submit">Sagen</button>
+      </form>` :
+      `<div class="chat-leer">Du bist ausgeschieden und hörst nur zu.</div>`;
+    return `<div class="panel chat-panel">
+      <div class="chat-kopf">Dorfversammlung${s.kiAn?' <span class="chat-marke">Bots reden mit</span>':''}</div>
+      <div class="chat-lauf" id="chatLauf">${zeilen}</div>
+      ${eingabe}
+    </div>`;
+  }
+
   function renderDayDiscuss(s){
     const t = s.timer.seconds, total = s.timer.total;
     const circumference = 2*Math.PI*78;
@@ -416,8 +463,12 @@
           <text class="ring-label" x="90" y="97">${mm}:${ss}</text>
         </svg>
       </div>
-      ${!s.me.alive ? `<div class="panel"><p class="lead" style="margin:0;text-align:center;">Du bist ausgeschieden — schau still zu.</p></div>` : `<div class="panel"><p class="lead" style="margin:0;text-align:center;">Der Erzähler öffnet die Abstimmung, sobald ihr fertig diskutiert habt.</p></div>`}
+      ${chatBlock(s)}
+      <div class="panel"><p class="lead" style="margin:0;text-align:center;font-size:.9rem;">Der Erzähler öffnet die Abstimmung, sobald ihr fertig diskutiert habt.</p></div>
     `, "phase-day");
+    // Ans Ende rollen, sonst sieht man neue Beitraege nicht.
+    const lauf = document.getElementById("chatLauf");
+    if(lauf) lauf.scrollTop = lauf.scrollHeight;
   }
 
   function renderDayVote(s){
@@ -484,6 +535,7 @@
       send({ t:"joinAsPlayer", name, code });
       return;
     }
+    if(action==="chat-send"){ return; }   // wird ueber submit behandelt
     if(action==="reveal-flip"){ window.__cardFlipped=true; sfx.flip(); render(); return; }
     if(action==="ack-role"){ send({t:"ackRole"}); return; }
 

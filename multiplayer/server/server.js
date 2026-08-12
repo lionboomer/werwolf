@@ -6,6 +6,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { WebSocketServer } = require("ws");
 const { ROLES, rolePoolFor } = require("./roleData");
+const ki = require("./ki");
 
 const PORT = process.env.PORT || 8791;
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -61,7 +62,14 @@ function botZug(room) {
       // Zwei Schritte wie beim Menschen: erst schauen, dann die Augen schliessen.
       if (room.seerResult == null) {
         const z = zufall(lebend.filter((p) => p.id !== s.id));
-        if (z) { room.seerResult = z.id; getan = true; }
+        if (z) {
+          room.seerResult = z.id;
+          // Die eigene Vision merken -- ein Bot muss sich am Tag darauf
+          // berufen koennen, ohne dafuer fremdes Wissen zu brauchen.
+          s.visionen = s.visionen || [];
+          s.visionen.push({ name: z.name, rolle: ROLES[z.role] ? ROLES[z.role].name : z.role });
+          getan = true;
+        }
       } else { afterSeer(room); getan = true; }
     }
   } else if (room.phase === "wolves") {
@@ -80,7 +88,15 @@ function botZug(room) {
       else if (room.witchStep === "ask-poison") { room.witchPoisonTarget = null; resolveNight(room); getan = true; }
     }
   } else if (room.phase === "day-vote") {
-    lebend.filter((p) => p.isBot && room.votesCast[p.id] == null).forEach((b) => {
+    const offen = lebend.filter((p) => p.isBot && room.votesCast[p.id] == null);
+    if (offen.length && ki.kiAktiv() && !room.kiLaeuft) {
+      // Begruendete Stimmen holen. Laeuft nebenher; bis die Antwort da ist,
+      // bleibt die Stimme offen. Kommt keine Antwort, greift unten der Wuerfel.
+      kiStimmenHolen(room, offen);
+    }
+    offen.forEach((b) => {
+      if (room.votesCast[b.id] != null) return;
+      if (b.kiStimmeLaeuft) return;            // wartet noch auf das Modell
       let ziele = lebend.filter((p) => p.id !== b.id);
       if (room.voteRestrict) ziele = ziele.filter((p) => room.voteRestrict.includes(p.id));
       const z = zufall(ziele);
@@ -98,7 +114,81 @@ function botZug(room) {
   return getan;
 }
 
+/* ------------------------------------------------------------- KI-Anbindung --
+   Die Modellaufrufe laufen strikt nebenher: Der Spielablauf wartet nie auf
+   OpenAI. Kommt eine Antwort, wird sie eingespielt und der Raum neu gesendet;
+   kommt keine, passiert schlicht nichts Weiteres. Ein Partyspiel darf nicht
+   stehenbleiben, weil ein fremder Dienst gerade langsam ist.                */
+const KI_HILFEN = { aliveList, byId: null, ROLES };   // byId unten nachgereicht
+
+function chatEintrag(room, name, text, art) {
+  room.chat.push({ name, text, art: art || "spieler", ts: Date.now() });
+  if (room.chat.length > 120) room.chat.splice(0, room.chat.length - 120);
+}
+
+const KI_MAX_BEITRAEGE = 8;        // je Diskussionsrunde, gegen Endlosgeplapper
+
+function kiDiskussion(room) {
+  if (!ki.kiAktiv() || room.phase !== "day-discuss") return;
+  if (room.kiLaeuft) return;
+  if (room.kiBeitraege >= KI_MAX_BEITRAEGE) return;
+  const bots = aliveList(room).filter((p) => p.isBot);
+  if (!bots.length) return;
+  // Wer am laengsten nichts gesagt hat, kommt dran -- sonst reden immer dieselben.
+  bots.sort((a, b) => (a.zuletztGeredet || 0) - (b.zuletztGeredet || 0));
+  const bot = bots[0];
+  room.kiLaeuft = true;
+  ki.botBeitrag(room, bot, KI_HILFEN)
+    .then((text) => {
+      if (text && room.phase === "day-discuss") {
+        bot.zuletztGeredet = Date.now();
+        room.kiBeitraege++;
+        chatEintrag(room, bot.name, text, "bot");
+        broadcast(room);
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      room.kiLaeuft = false;
+      // Naechsten Beitrag mit Abstand planen, damit es sich wie ein Gespraech
+      // anfuehlt und nicht wie ein Wasserfall.
+      if (room.phase === "day-discuss") {
+        clearTimeout(room.kiGeplant);
+        room.kiGeplant = setTimeout(() => kiDiskussion(room), 6000 + Math.random() * 7000);
+      }
+    });
+}
+
+function kiStimmenHolen(room, bots) {
+  const lebend = aliveList(room);
+  bots.forEach((b) => {
+    if (b.kiStimmeLaeuft) return;
+    let ziele = lebend.filter((p) => p.id !== b.id);
+    if (room.voteRestrict) ziele = ziele.filter((p) => room.voteRestrict.includes(p.id));
+    if (!ziele.length) return;
+    b.kiStimmeLaeuft = true;
+    ki.botStimme(room, b, ziele.map((p) => p.name), KI_HILFEN)
+      .then((wahl) => {
+        if (!wahl || room.phase !== "day-vote") return;
+        const ziel = ziele.find((p) => p.name === wahl.name);
+        if (!ziel || room.votesCast[b.id] != null) return;
+        room.votesCast[b.id] = ziel.id;
+        // Die Begruendung nennt, gegen WEN sie sich richtet -- ohne das liest
+        // sich "wirkt zu selbstsicher" wie ein Satz ohne Adressat.
+        if (wahl.grund) {
+          const grund = wahl.grund.includes(ziel.name)
+            ? wahl.grund : `Ich stimme für ${ziel.name}: ${wahl.grund}`;
+          chatEintrag(room, b.name, grund, "bot");
+        }
+        broadcast(room);
+      })
+      .catch(() => {})
+      .finally(() => { b.kiStimmeLaeuft = false; });
+  });
+}
+
 function byId(room, id) { return room.players.find((p) => p.id === id); }
+KI_HILFEN.byId = byId;
 
 function dedupeName(room, name) {
   const base = (name || "").trim().slice(0, 24) || "Spieler";
@@ -118,6 +208,10 @@ function newRoom(code, narratorToken) {
     narratorWs: null,
     players: [],
     phase: "lobby",
+    chat: [],                 // Tagesdiskussion, oeffentlich fuer alle
+    kiLaeuft: false,          // verhindert parallele Modellaufrufe je Raum
+    kiBeitraege: 0,           // Deckel je Diskussionsrunde
+    kiGeplant: null,
     night: 1,
     log: [],
     logMarkStart: 0,
@@ -196,6 +290,7 @@ function checkWin(room) {
 }
 
 function startNight(room) {
+  clearTimeout(room.kiGeplant);
   room.logMarkStart = room.log.length;
   room.wolfTarget = null;
   room.wolfConfirmedBy = [];
@@ -250,6 +345,9 @@ function afterHunterQueueDrained(room) {
   if (w) { room.winner = w; room.phase = "end"; stopTimer(room); return; }
   if (room.afterHunterTarget === "toDay") {
     room.phase = "day-discuss";
+    room.kiBeitraege = 0;
+    clearTimeout(room.kiGeplant);
+    room.kiGeplant = setTimeout(() => kiDiskussion(room), 3500);
     room.timerSeconds = room.timerTotal;
     room.timerRunning = false;
   } else {
@@ -418,6 +516,8 @@ function buildStateFor(room, viewerId) {
   const base = {
     t: "state",
     code: room.code,
+    chat: room.chat.slice(-40),
+    kiAn: ki.kiAktiv(),
     phase: room.phase,
     night: room.night,
     players: publicRosterFor(room, viewerId),
@@ -720,6 +820,19 @@ function handlePlayerMessage(room, ws, msg) {
   if (!me) return;
 
   switch (msg.t) {
+    case "chat": {
+      // Reden darf nur, wer lebt und nur waehrend der Tagesdiskussion --
+      // sonst waere es ein Kanal, um Nachtwissen durchzustechen.
+      if (room.phase !== "day-discuss" || !me.alive) return;
+      const text = String(msg.text || "").replace(/\s+/g, " ").trim().slice(0, 240);
+      if (!text) return;
+      chatEintrag(room, me.name, text, "spieler");
+      broadcast(room);
+      // Auf einen Menschen antworten die Bots zeitnah, nicht nach Fahrplan.
+      clearTimeout(room.kiGeplant);
+      room.kiGeplant = setTimeout(() => kiDiskussion(room), 2200 + Math.random() * 2500);
+      return;
+    }
     case "ackRole": {
       if (room.phase !== "reveal") return;
       me.ackedRole = true;
